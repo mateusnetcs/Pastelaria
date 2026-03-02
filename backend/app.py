@@ -12,13 +12,16 @@ from datetime import datetime, timedelta
 import uuid
 from functools import wraps
 
+import jwt
+
 from config import DB_CONFIG, FLASK_SECRET_KEY, ALLOWED_ORIGINS, FLASK_DEBUG
 from routes.whatsapp import whatsapp_bp
 from routes.vapi import vapi_bp
 
 logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
 
-admin_tokens = {}
+ADMIN_JWT_ALGORITHM = 'HS256'
+ADMIN_JWT_EXPIRES_HOURS = 24
 
 FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'frontend')
 UPLOAD_DIR = os.path.join(FRONTEND_DIR, 'uploads')
@@ -964,36 +967,36 @@ def get_pedido_status(pedido_id):
 # ==================== ADMIN AUTH ====================
 
 def gerar_token_admin(user_id):
-    """Gera um token simples para autenticação admin."""
-    token = uuid.uuid4().hex + uuid.uuid4().hex
-    admin_tokens[token] = {
+    """Gera um JWT stateless para autenticação admin (válido em qualquer worker)."""
+    payload = {
+        'sub': str(user_id),
         'user_id': user_id,
-        'criado_em': datetime.now(),
-        'expira_em': datetime.now() + timedelta(hours=12)
+        'exp': datetime.utcnow() + timedelta(hours=ADMIN_JWT_EXPIRES_HOURS),
+        'iat': datetime.utcnow()
     }
-    for t in list(admin_tokens.keys()):
-        if admin_tokens[t]['expira_em'] < datetime.now():
-            del admin_tokens[t]
-    return token
+    return jwt.encode(payload, FLASK_SECRET_KEY, algorithm=ADMIN_JWT_ALGORITHM)
 
 
 def admin_required(f):
-    """Decorador que exige autenticação admin."""
+    """Decorador que exige autenticação admin via JWT (stateless, funciona com múltiplos workers)."""
     @wraps(f)
     def decorated(*args, **kwargs):
         auth_header = request.headers.get('Authorization', '')
         token = auth_header.replace('Bearer ', '') if auth_header.startswith('Bearer ') else ''
 
-        if not token or token not in admin_tokens:
+        if not token:
             return jsonify({'success': False, 'error': 'Não autenticado'}), 401
 
-        info = admin_tokens[token]
-        if info['expira_em'] < datetime.now():
-            del admin_tokens[token]
+        try:
+            payload = jwt.decode(token, FLASK_SECRET_KEY, algorithms=[ADMIN_JWT_ALGORITHM])
+            request.admin_user_id = payload.get('user_id') or int(payload.get('sub', 0))
+            if not request.admin_user_id:
+                return jsonify({'success': False, 'error': 'Token inválido'}), 401
+            return f(*args, **kwargs)
+        except jwt.ExpiredSignatureError:
             return jsonify({'success': False, 'error': 'Sessão expirada'}), 401
-
-        request.admin_user_id = info['user_id']
-        return f(*args, **kwargs)
+        except jwt.InvalidTokenError:
+            return jsonify({'success': False, 'error': 'Não autenticado'}), 401
     return decorated
 
 
@@ -1076,11 +1079,7 @@ def admin_me():
 
 @app.route('/api/admin/logout', methods=['POST'])
 def admin_logout():
-    """Logout do admin."""
-    auth_header = request.headers.get('Authorization', '')
-    token = auth_header.replace('Bearer ', '') if auth_header.startswith('Bearer ') else ''
-    if token in admin_tokens:
-        del admin_tokens[token]
+    """Logout do admin (JWT é stateless, cliente remove o token)."""
     return jsonify({'success': True}), 200
 
 

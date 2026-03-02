@@ -263,8 +263,15 @@ async function carregarPedidos() {
                 showToast('error', 'Erro', data.error || 'Erro ao carregar pedidos');
             }
         } else if (response.status === 401) {
-            // Não autenticado como admin
-            window.location.href = 'index.html';
+            // Sessão expirada ou não autenticado - voltar para tela de login
+            if (typeof logoutAdmin === 'function') {
+                logoutAdmin();
+            } else {
+                localStorage.removeItem('admin_token');
+                localStorage.removeItem('admin_nome');
+                localStorage.removeItem('admin_email');
+                window.location.reload();
+            }
         } else {
             const errorData = await response.json().catch(() => ({}));
             console.error('Erro na resposta:', response.status, errorData);
