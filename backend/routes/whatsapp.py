@@ -103,7 +103,7 @@ def webhook_waha():
 
             return jsonify({"status": "call_rejected"}), 200
 
-        if event not in ('message', 'message.any'):
+        if event != 'message':
             return jsonify({"status": "ignored", "reason": "not a message event"}), 200
 
         payload = data.get('payload', {})
