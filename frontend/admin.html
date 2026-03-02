@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - Pastelão Brothers</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="css/styles.css">
+    <script src="js/api.js"></script>
+    <script src="js/toast.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #f8fafc;
+        }
+
+        .sidebar-item:hover, .sidebar-item.active {
+            background-color: rgba(255, 255, 255, 0.1);
+            border-left: 4px solid #f97316;
+        }
+
+        .status-column {
+            min-height: 70vh;
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+
+        .kanban-card {
+            transition: all 0.2s;
+        }
+
+        .kanban-card.dragging {
+            opacity: 0.5;
+            transform: rotate(2deg);
+        }
+
+        .kanban-body.drag-over {
+            background-color: #e0f2fe;
+            border: 2px dashed #3b82f6;
+        }
+
+        .login-bg {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+        }
+
+        .login-card {
+            backdrop-filter: blur(10px);
+            animation: fadeInUp 0.5s ease-out;
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .input-focus:focus {
+            box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.2);
+        }
+
+        .btn-login {
+            background: linear-gradient(135deg, #f97316, #ea580c);
+            transition: all 0.3s;
+        }
+
+        .btn-login:hover {
+            background: linear-gradient(135deg, #ea580c, #c2410c);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(249, 115, 22, 0.4);
+        }
+
+        .btn-login:active {
+            transform: translateY(0);
+        }
+
+        .shake {
+            animation: shake 0.5s ease-in-out;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-8px); }
+            40%, 80% { transform: translateX(8px); }
+        }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden">
+
+    <!-- Tela de Login -->
+    <div id="login-screen" class="login-bg w-full h-full flex items-center justify-center">
+        <div class="login-card bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+            <div class="bg-[#1e293b] p-8 text-center">
+                <img src="/img/logo.png" class="w-16 h-16 rounded-full object-cover mx-auto" alt="Logo">
+                <h1 class="text-2xl font-bold text-orange-500">Pastelão Brothers</h1>
+                <p class="text-gray-400 text-sm mt-1">Painel Administrativo</p>
+            </div>
+
+            <form id="login-form" class="p-8" onsubmit="loginAdmin(event)">
+                <div id="login-error" class="hidden bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-5 text-sm">
+                    <i class="fas fa-exclamation-circle mr-2"></i>
+                    <span id="login-error-msg"></span>
+                </div>
+
+                <div class="mb-5">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">
+                        <i class="fas fa-envelope mr-1 text-gray-400"></i> Email
+                    </label>
+                    <input type="email" id="login-email" required placeholder="seu@email.com"
+                        class="input-focus w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 transition-all text-gray-800">
+                </div>
+
+                <div class="mb-6">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">
+                        <i class="fas fa-lock mr-1 text-gray-400"></i> Senha
+                    </label>
+                    <div class="relative">
+                        <input type="password" id="login-password" required placeholder="Sua senha"
+                            class="input-focus w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 transition-all text-gray-800 pr-12">
+                        <button type="button" onclick="togglePassword()" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                            <i id="password-eye" class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <button type="submit" id="btn-login" class="btn-login w-full py-3 text-white font-bold rounded-lg text-lg">
+                    <span id="login-text">Entrar</span>
+                    <i id="login-spinner" class="fas fa-spinner fa-spin ml-2 hidden"></i>
+                </button>
+            </form>
+
+            <div class="px-8 pb-6 text-center">
+                <a href="index.html" class="text-sm text-gray-400 hover:text-orange-500 transition-colors">
+                    <i class="fas fa-arrow-left mr-1"></i> Voltar ao site
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dashboard (oculto até login) -->
+    <div id="admin-panel" class="hidden w-full h-full flex">
+
+    <!-- Sidebar -->
+    <aside class="w-64 bg-[#1e293b] text-white flex flex-col shrink-0">
+        <div class="p-6">
+            <div class="flex items-center space-x-2 mb-1">
+                <img src="/img/logo.png" class="w-8 h-8 rounded-full object-cover" alt="Logo">
+                <span class="text-xl font-bold text-orange-500">Admin Panel</span>
+            </div>
+            <p class="text-gray-400 text-xs px-1">Pastelão Brothers</p>
+        </div>
+
+        <nav class="flex-grow mt-4">
+            <a href="#" onclick="mostrarDashboard(); return false;" class="sidebar-item active flex items-center px-6 py-3 text-gray-100 transition-colors">
+                <i class="fas fa-chart-line w-6"></i>
+                <span class="ml-3 font-medium">Dashboard</span>
+            </a>
+            <a href="#" onclick="mostrarPedidos(); return false;" class="sidebar-item flex items-center px-6 py-3 text-gray-400 hover:text-white transition-colors">
+                <i class="fas fa-shopping-bag w-6"></i>
+                <span class="ml-3 font-medium">Pedidos</span>
+            </a>
+            <a href="#" onclick="mostrarProdutos(); return false;" class="sidebar-item flex items-center px-6 py-3 text-gray-400 hover:text-white transition-colors">
+                <i class="fas fa-box w-6"></i>
+                <span class="ml-3 font-medium">Produtos</span>
+            </a>
+            <a href="#" onclick="mostrarClientes(); return false;" class="sidebar-item flex items-center px-6 py-3 text-gray-400 hover:text-white transition-colors">
+                <i class="fas fa-users w-6"></i>
+                <span class="ml-3 font-medium">Clientes</span>
+            </a>
+            <a href="#" onclick="mostrarRelatorios(); return false;" class="sidebar-item flex items-center px-6 py-3 text-gray-400 hover:text-white transition-colors">
+                <i class="fas fa-file-alt w-6"></i>
+                <span class="ml-3 font-medium">Relatórios</span>
+            </a>
+        </nav>
+
+        <div class="p-4 border-t border-gray-700 space-y-1">
+            <div class="flex items-center text-gray-400 text-sm px-2 py-1">
+                <i class="fas fa-user-shield mr-2"></i>
+                <span id="admin-name" class="truncate">Admin</span>
+            </div>
+            <a href="#" onclick="logoutAdmin(); return false;" class="flex items-center text-gray-400 hover:text-red-400 transition-colors text-sm px-2 py-2">
+                <i class="fas fa-sign-out-alt mr-2"></i>
+                Sair
+            </a>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-grow flex flex-col overflow-hidden bg-gray-100">
+        
+        <!-- Header -->
+        <header class="bg-white border-b border-gray-200 px-8 py-6">
+            <h1 class="text-3xl font-bold text-slate-800" id="page-title">Dashboard</h1>
+            <p class="text-slate-500">Gerencie pedidos e acompanhe o status em tempo real</p>
+        </header>
+
+        <!-- Dashboard Kanban -->
+        <div id="dashboard-content" class="p-8 overflow-x-auto h-full">
+            <div class="flex gap-6 min-w-max h-full pb-4" style="min-width: calc(5 * 320px);">
+                
+                <!-- Coluna 1: Pagamento Pendente -->
+                <div class="status-column w-80 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden">
+                    <div class="bg-yellow-500 p-4 flex justify-between items-center text-white">
+                        <div class="flex items-center font-bold">
+                            <i class="far fa-clock mr-2"></i> Pagamento Pendente
+                        </div>
+                        <span class="bg-white/20 px-2 py-0.5 rounded text-sm font-bold" id="count-pendente">0</span>
+                    </div>
+                    <div class="p-3 space-y-3 overflow-y-auto flex-grow bg-gray-50/50" id="coluna-pendente" ondrop="drop(event)" ondragover="allowDrop(event)">
+                        <!-- Cards serão inseridos aqui via JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Coluna 2: Confirmado -->
+                <div class="status-column w-80 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden">
+                    <div class="bg-green-500 p-4 flex justify-between items-center text-white">
+                        <div class="flex items-center font-bold">
+                            <i class="fas fa-check-circle mr-2"></i> Confirmado
+                        </div>
+                        <span class="bg-white/20 px-2 py-0.5 rounded text-sm font-bold" id="count-confirmado">0</span>
+                    </div>
+                    <div class="p-3 space-y-3 overflow-y-auto flex-grow bg-gray-50/50" id="coluna-confirmado" ondrop="drop(event)" ondragover="allowDrop(event)">
+                        <!-- Cards serão inseridos aqui via JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Coluna 3: Em Preparação -->
+                <div class="status-column w-80 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden">
+                    <div class="bg-blue-500 p-4 flex justify-between items-center text-white">
+                        <div class="flex items-center font-bold">
+                            <i class="fas fa-utensils mr-2"></i> Em Preparação
+                        </div>
+                        <span class="bg-white/20 px-2 py-0.5 rounded text-sm font-bold" id="count-preparacao">0</span>
+                    </div>
+                    <div class="p-3 space-y-3 overflow-y-auto flex-grow bg-gray-50/50" id="coluna-preparacao" ondrop="drop(event)" ondragover="allowDrop(event)">
+                        <!-- Cards serão inseridos aqui via JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Coluna 4: Pronto para Entrega -->
+                <div class="status-column w-80 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden">
+                    <div class="bg-purple-500 p-4 flex justify-between items-center text-white">
+                        <div class="flex items-center font-bold">
+                            <i class="fas fa-truck mr-2"></i> Pronto para Entrega
+                        </div>
+                        <span class="bg-white/20 px-2 py-0.5 rounded text-sm font-bold" id="count-pronto">0</span>
+                    </div>
+                    <div class="p-3 space-y-3 overflow-y-auto flex-grow bg-gray-50/50" id="coluna-pronto" ondrop="drop(event)" ondragover="allowDrop(event)">
+                        <!-- Cards serão inseridos aqui via JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Coluna 5: Entregue/Retirado -->
+                <div class="status-column w-80 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden">
+                    <div class="bg-emerald-500 p-4 flex justify-between items-center text-white">
+                        <div class="flex items-center font-bold">
+                            <i class="fas fa-check-circle mr-2"></i> Entregue/Retirado
+                        </div>
+                        <span class="bg-white/20 px-2 py-0.5 rounded text-sm font-bold" id="count-entregue">0</span>
+                    </div>
+                    <div class="p-3 space-y-3 overflow-y-auto flex-grow bg-gray-50/50" id="coluna-entregue" ondrop="drop(event)" ondragover="allowDrop(event)">
+                        <!-- Cards serão inseridos aqui via JavaScript -->
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Outras páginas (inicialmente ocultas) -->
+        <div id="pedidos-content" class="hidden p-8">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <p class="text-gray-600">Página de Pedidos - Em desenvolvimento</p>
+            </div>
+        </div>
+
+        <div id="produtos-content" class="hidden p-8 overflow-y-auto h-full">
+            <!-- Header com botão adicionar -->
+            <div class="flex justify-between items-center mb-6">
+                <div class="flex items-center gap-4">
+                    <div class="relative">
+                        <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                        <input type="text" id="busca-produto" placeholder="Buscar produto..." oninput="filtrarProdutos()"
+                            class="pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 w-72 text-sm">
+                    </div>
+                    <select id="filtro-categoria" onchange="filtrarProdutos()" class="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 text-sm text-gray-600">
+                        <option value="">Todas categorias</option>
+                        <option value="Salgados">Salgados</option>
+                        <option value="Doces">Doces</option>
+                        <option value="Bebidas">Bebidas</option>
+                    </select>
+                    <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                        <input type="checkbox" id="mostrar-inativos" onchange="filtrarProdutos()" class="rounded border-gray-300 text-orange-500 focus:ring-orange-500">
+                        Mostrar inativos
+                    </label>
+                </div>
+                <button onclick="abrirModalProduto()" class="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2.5 rounded-lg font-semibold text-sm transition-colors shadow-sm">
+                    <i class="fas fa-plus mr-2"></i>Novo Produto
+                </button>
+            </div>
+
+            <!-- Tabela de produtos -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <table class="w-full">
+                    <thead class="bg-gray-50 border-b border-gray-200">
+                        <tr>
+                            <th class="text-left px-6 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Produto</th>
+                            <th class="text-left px-6 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Categoria</th>
+                            <th class="text-right px-6 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Preço</th>
+                            <th class="text-center px-6 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Estoque</th>
+                            <th class="text-center px-6 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                            <th class="text-center px-6 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabela-produtos" class="divide-y divide-gray-100">
+                    </tbody>
+                </table>
+                <div id="produtos-vazio" class="hidden p-12 text-center">
+                    <i class="fas fa-box-open text-5xl text-gray-300 mb-3"></i>
+                    <p class="text-gray-400 text-lg">Nenhum produto encontrado</p>
+                </div>
+            </div>
+            <div class="mt-4 text-sm text-gray-400" id="produtos-contagem"></div>
+        </div>
+
+        <!-- Modal Criar/Editar Produto -->
+        <div id="modal-produto" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+                <div class="bg-[#1e293b] p-5 rounded-t-2xl flex justify-between items-center">
+                    <h2 class="text-lg font-bold text-white" id="modal-produto-titulo">Novo Produto</h2>
+                    <button onclick="fecharModalProduto()" class="text-gray-400 hover:text-white transition-colors">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+                <form id="form-produto" onsubmit="salvarProduto(event)" class="p-6 space-y-4">
+                    <input type="hidden" id="produto-id">
+
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Nome *</label>
+                        <input type="text" id="produto-nome" required placeholder="Ex: Pastel de Carne"
+                            class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 text-sm">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Descrição</label>
+                        <textarea id="produto-descricao" rows="2" placeholder="Descrição do produto..."
+                            class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 text-sm resize-none"></textarea>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">Preço Venda (R$) *</label>
+                            <input type="number" id="produto-preco" required step="0.01" min="0" placeholder="0.00"
+                                class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">Custo (R$) *</label>
+                            <input type="number" id="produto-custo" required step="0.01" min="0" placeholder="0.00"
+                                class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">Estoque</label>
+                            <input type="number" id="produto-quantidade" min="0" value="0" placeholder="0"
+                                class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 text-sm">
+                        </div>
+                    </div>
+                    <div id="margem-preview" class="hidden bg-green-50 border border-green-200 rounded-lg px-4 py-2 text-sm">
+                        <span class="text-green-700 font-semibold">Margem: </span><span id="margem-valor" class="font-bold text-green-800"></span>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Categoria *</label>
+                        <select id="produto-categoria" required
+                            class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 text-sm bg-white">
+                            <option value="">Selecione a categoria</option>
+                            <option value="Salgados">Salgados</option>
+                            <option value="Doces">Doces</option>
+                            <option value="Bebidas">Bebidas</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Imagem do Produto</label>
+                        <div id="upload-area" class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-orange-400 transition-colors cursor-pointer"
+                            onclick="document.getElementById('produto-arquivo').click()"
+                            ondragover="event.preventDefault(); this.classList.add('border-orange-500','bg-orange-50')"
+                            ondragleave="this.classList.remove('border-orange-500','bg-orange-50')"
+                            ondrop="handleDrop(event)">
+                            <div id="upload-placeholder">
+                                <i class="fas fa-cloud-upload-alt text-3xl text-gray-400 mb-2"></i>
+                                <p class="text-sm text-gray-500">Clique ou arraste uma imagem aqui</p>
+                                <p class="text-xs text-gray-400 mt-1">JPG, PNG, WEBP ou GIF</p>
+                            </div>
+                            <div id="upload-preview" class="hidden">
+                                <img id="preview-img" class="max-h-32 mx-auto rounded-lg shadow-sm">
+                                <p id="preview-nome" class="text-xs text-gray-500 mt-2"></p>
+                            </div>
+                        </div>
+                        <input type="file" id="produto-arquivo" accept="image/*" class="hidden" onchange="handleFileSelect(this)">
+                        <input type="hidden" id="produto-imagem">
+                        <div id="upload-progress" class="hidden mt-2">
+                            <div class="w-full bg-gray-200 rounded-full h-1.5">
+                                <div id="upload-bar" class="bg-orange-500 h-1.5 rounded-full transition-all" style="width: 0%"></div>
+                            </div>
+                            <p class="text-xs text-gray-400 mt-1" id="upload-status">Enviando...</p>
+                        </div>
+                        <div class="flex items-center gap-2 mt-2">
+                            <span class="text-xs text-gray-400">ou</span>
+                            <input type="url" id="produto-imagem-url" placeholder="Cole a URL da imagem" oninput="usarUrl(this.value)"
+                                class="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 text-xs">
+                        </div>
+                    </div>
+
+                    <div class="flex gap-3 pt-3">
+                        <button type="submit" id="btn-salvar-produto" class="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-2.5 rounded-lg font-semibold text-sm transition-colors">
+                            <i class="fas fa-save mr-2"></i>Salvar
+                        </button>
+                        <button type="button" onclick="fecharModalProduto()" class="px-6 py-2.5 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 font-semibold text-sm transition-colors">
+                            Cancelar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal Confirmar Exclusão -->
+        <div id="modal-excluir" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center">
+                <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i class="fas fa-trash text-red-500 text-2xl"></i>
+                </div>
+                <h3 class="text-lg font-bold text-gray-800 mb-2">Desativar Produto?</h3>
+                <p class="text-sm text-gray-500 mb-6" id="excluir-produto-nome">O produto será desativado do cardápio.</p>
+                <div class="flex gap-3">
+                    <button onclick="confirmarExclusao()" class="flex-1 bg-red-500 hover:bg-red-600 text-white py-2.5 rounded-lg font-semibold text-sm transition-colors">
+                        Desativar
+                    </button>
+                    <button onclick="fecharModalExcluir()" class="flex-1 border border-gray-300 text-gray-600 py-2.5 rounded-lg hover:bg-gray-50 font-semibold text-sm transition-colors">
+                        Cancelar
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- CLIENTES -->
+        <div id="clientes-content" class="hidden p-8 overflow-y-auto h-full">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-800">Clientes</h2>
+                    <p class="text-sm text-gray-500">Gerencie os clientes cadastrados</p>
+                </div>
+                <button onclick="abrirModalCliente()" class="bg-orange-600 hover:bg-orange-700 text-white px-5 py-2.5 rounded-lg font-semibold text-sm transition-colors">
+                    <i class="fas fa-user-plus mr-2"></i>Novo Cliente
+                </button>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <div class="relative flex-1">
+                        <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
+                        <input type="text" id="busca-cliente" placeholder="Buscar por nome, email ou telefone..." oninput="filtrarClientes()" class="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
+                    </div>
+                    <div class="flex items-center gap-2 text-sm text-gray-500">
+                        <span id="total-clientes">0</span> clientes
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead class="bg-gray-50 border-b border-gray-200">
+                            <tr>
+                                <th class="text-left px-4 py-3 font-semibold text-gray-600">Cliente</th>
+                                <th class="text-left px-4 py-3 font-semibold text-gray-600 hidden sm:table-cell">Email</th>
+                                <th class="text-left px-4 py-3 font-semibold text-gray-600 hidden md:table-cell">Telefone</th>
+                                <th class="text-left px-4 py-3 font-semibold text-gray-600 hidden lg:table-cell">Cadastro</th>
+                                <th class="text-left px-4 py-3 font-semibold text-gray-600 hidden lg:table-cell">Pedidos</th>
+                                <th class="text-center px-4 py-3 font-semibold text-gray-600">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabela-clientes" class="divide-y divide-gray-100">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Cliente -->
+        <div id="modal-cliente" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+                <div class="bg-[#1e293b] p-5 rounded-t-2xl flex justify-between items-center">
+                    <h2 id="modal-cliente-titulo" class="text-lg font-bold text-white">Novo Cliente</h2>
+                    <button onclick="fecharModalCliente()" class="text-gray-400 hover:text-white transition-colors">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+                <div class="p-6 space-y-4">
+                    <input type="hidden" id="cliente-id">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Nome *</label>
+                        <input type="text" id="cliente-nome" class="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-orange-500" placeholder="Nome completo">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Email *</label>
+                        <input type="email" id="cliente-email" class="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-orange-500" placeholder="email@exemplo.com">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Telefone</label>
+                        <input type="tel" id="cliente-telefone" class="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-orange-500" placeholder="(00) 00000-0000">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Data de Nascimento</label>
+                        <input type="date" id="cliente-nascimento" class="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-orange-500">
+                    </div>
+                    <div id="campo-senha-cliente">
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Senha</label>
+                        <input type="text" id="cliente-senha" class="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-orange-500" placeholder="Deixe em branco para gerar automaticamente">
+                    </div>
+                </div>
+                <div class="px-6 pb-6 flex gap-3">
+                    <button onclick="salvarCliente()" class="flex-1 bg-orange-600 hover:bg-orange-700 text-white py-2.5 rounded-lg font-semibold text-sm transition-colors">
+                        <i class="fas fa-save mr-2"></i>Salvar
+                    </button>
+                    <button onclick="fecharModalCliente()" class="px-6 py-2.5 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 font-semibold text-sm transition-colors">
+                        Cancelar
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Excluir Cliente -->
+        <div id="modal-excluir-cliente" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center">
+                <div class="w-14 h-14 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
+                    <i class="fas fa-user-times text-red-600 text-2xl"></i>
+                </div>
+                <h3 class="text-lg font-bold text-gray-800 mb-2">Excluir Cliente?</h3>
+                <p class="text-sm text-gray-500 mb-6">Esta ação é irreversível. Todos os dados do cliente serão removidos.</p>
+                <div class="flex gap-3">
+                    <button onclick="document.getElementById('modal-excluir-cliente').classList.add('hidden')" class="flex-1 py-2.5 border border-gray-300 rounded-lg font-semibold text-sm text-gray-600 hover:bg-gray-50">Cancelar</button>
+                    <button onclick="confirmarExclusaoCliente()" class="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold text-sm">Excluir</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="relatorios-content" class="hidden p-8 overflow-y-auto h-full space-y-6">
+
+            <!-- KPIs -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                    <p class="text-xs text-gray-500 uppercase font-semibold tracking-wider">Receita Hoje</p>
+                    <p class="text-2xl font-bold text-gray-800 mt-1" id="kpi-hoje">R$ 0,00</p>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                    <p class="text-xs text-gray-500 uppercase font-semibold tracking-wider">Receita Semana</p>
+                    <p class="text-2xl font-bold text-green-600 mt-1" id="kpi-semana">R$ 0,00</p>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                    <p class="text-xs text-gray-500 uppercase font-semibold tracking-wider">Receita Mês</p>
+                    <p class="text-2xl font-bold text-blue-600 mt-1" id="kpi-mes">R$ 0,00</p>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                    <p class="text-xs text-gray-500 uppercase font-semibold tracking-wider">Ticket Médio</p>
+                    <p class="text-2xl font-bold text-purple-600 mt-1" id="kpi-ticket">R$ 0,00</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                    <p class="text-xs text-gray-500 uppercase font-semibold tracking-wider">Total Pedidos</p>
+                    <p class="text-2xl font-bold text-gray-800 mt-1" id="kpi-pedidos">0</p>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                    <p class="text-xs text-gray-500 uppercase font-semibold tracking-wider">Clientes</p>
+                    <p class="text-2xl font-bold text-orange-500 mt-1" id="kpi-clientes">0</p>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                    <p class="text-xs text-gray-500 uppercase font-semibold tracking-wider">Pendentes</p>
+                    <p class="text-2xl font-bold text-yellow-500 mt-1" id="kpi-pendentes">0</p>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                    <p class="text-xs text-gray-500 uppercase font-semibold tracking-wider">Receita Total</p>
+                    <p class="text-2xl font-bold text-emerald-600 mt-1" id="kpi-total">R$ 0,00</p>
+                </div>
+            </div>
+
+            <!-- Gráfico Faturamento -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-bold text-gray-800"><i class="fas fa-chart-bar mr-2 text-orange-500"></i>Faturamento</h3>
+                    <div class="flex gap-1 bg-gray-100 rounded-lg p-1">
+                        <button onclick="carregarFaturamento('dia')" id="btn-fat-dia" class="px-3 py-1 rounded-md text-xs font-semibold bg-orange-500 text-white">Dia</button>
+                        <button onclick="carregarFaturamento('semana')" id="btn-fat-semana" class="px-3 py-1 rounded-md text-xs font-semibold text-gray-600 hover:bg-gray-200">Semana</button>
+                        <button onclick="carregarFaturamento('mes')" id="btn-fat-mes" class="px-3 py-1 rounded-md text-xs font-semibold text-gray-600 hover:bg-gray-200">Mês</button>
+                    </div>
+                </div>
+                <canvas id="grafico-faturamento" height="100"></canvas>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                <!-- DRE -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-bold text-gray-800"><i class="fas fa-file-invoice-dollar mr-2 text-green-500"></i>DRE</h3>
+                        <select id="dre-periodo" onchange="carregarDRE(this.value)" class="px-3 py-1.5 border border-gray-300 rounded-lg text-xs font-semibold focus:outline-none focus:border-orange-500">
+                            <option value="hoje">Hoje</option>
+                            <option value="semana">Esta Semana</option>
+                            <option value="mes" selected>Este Mês</option>
+                            <option value="total">Todo Período</option>
+                        </select>
+                    </div>
+                    <div id="dre-content" class="space-y-2 text-sm"></div>
+                </div>
+
+                <!-- Produtos Mais Vendidos -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <h3 class="text-lg font-bold text-gray-800 mb-4"><i class="fas fa-trophy mr-2 text-yellow-500"></i>Produtos Mais Vendidos</h3>
+                    <div id="top-produtos" class="space-y-3"></div>
+                </div>
+
+            </div>
+
+            <!-- Top Clientes -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-4"><i class="fas fa-users mr-2 text-blue-500"></i>Top Clientes</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-50 border-b border-gray-200">
+                            <tr>
+                                <th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">#</th>
+                                <th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Cliente</th>
+                                <th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Telefone</th>
+                                <th class="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Pedidos</th>
+                                <th class="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Total Gasto</th>
+                                <th class="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Último Pedido</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabela-top-clientes" class="divide-y divide-gray-100"></tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    </div><!-- fim admin-panel -->
+
+    <!-- Modal Detalhes do Pedido -->
+    <div id="modal-pedido-detalhe" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div class="bg-[#1e293b] p-5 rounded-t-2xl flex justify-between items-center">
+                <h2 class="text-lg font-bold text-white" id="detalhe-titulo">Pedido #0</h2>
+                <button onclick="fecharDetalhePedido()" class="text-gray-400 hover:text-white transition-colors">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            <div id="detalhe-body" class="p-6 space-y-4"></div>
+            <div class="px-6 pb-6 flex gap-3">
+                <button onclick="imprimirCupom()" class="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-2.5 rounded-lg font-semibold text-sm transition-colors">
+                    <i class="fas fa-print mr-2"></i>Imprimir Cupom
+                </button>
+                <button onclick="fecharDetalhePedido()" class="px-6 py-2.5 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 font-semibold text-sm transition-colors">
+                    Fechar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+    <script>
+    function togglePassword() {
+        const input = document.getElementById('login-password');
+        const eye = document.getElementById('password-eye');
+        if (input.type === 'password') {
+            input.type = 'text';
+            eye.className = 'fas fa-eye-slash';
+        } else {
+            input.type = 'password';
+            eye.className = 'fas fa-eye';
+        }
+    }
+
+    async function loginAdmin(e) {
+        e.preventDefault();
+        const email = document.getElementById('login-email').value.trim();
+        const senha = document.getElementById('login-password').value;
+        const errorDiv = document.getElementById('login-error');
+        const errorMsg = document.getElementById('login-error-msg');
+        const btnLogin = document.getElementById('btn-login');
+        const loginText = document.getElementById('login-text');
+        const spinner = document.getElementById('login-spinner');
+
+        errorDiv.classList.add('hidden');
+        btnLogin.disabled = true;
+        loginText.textContent = 'Entrando...';
+        spinner.classList.remove('hidden');
+
+        try {
+            await detectarPortaBackend();
+
+            const response = await fetch(`${API_URL}/admin/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ email, senha })
+            });
+
+            const data = await response.json();
+
+            if (response.ok && data.success) {
+                localStorage.setItem('admin_token', data.token);
+                localStorage.setItem('admin_nome', data.user.nome);
+                localStorage.setItem('admin_email', data.user.email);
+                mostrarPainel(data.user.nome);
+            } else {
+                errorMsg.textContent = data.error || 'Email ou senha incorretos';
+                errorDiv.classList.remove('hidden');
+                document.getElementById('login-form').classList.add('shake');
+                setTimeout(() => document.getElementById('login-form').classList.remove('shake'), 500);
+            }
+        } catch (err) {
+            errorMsg.textContent = 'Erro ao conectar com o servidor. Verifique se o backend está rodando.';
+            errorDiv.classList.remove('hidden');
+        } finally {
+            btnLogin.disabled = false;
+            loginText.textContent = 'Entrar';
+            spinner.classList.add('hidden');
+        }
+    }
+
+    function mostrarPainel(nome) {
+        document.getElementById('login-screen').classList.add('hidden');
+        document.getElementById('admin-panel').classList.remove('hidden');
+        document.getElementById('admin-panel').classList.add('flex');
+        document.getElementById('admin-name').textContent = nome || 'Admin';
+        carregarPedidos();
+        setInterval(carregarPedidos, 10000);
+    }
+
+    function logoutAdmin() {
+        const tokenLogout = localStorage.getItem('admin_token') || '';
+        localStorage.removeItem('admin_token');
+        localStorage.removeItem('admin_nome');
+        localStorage.removeItem('admin_email');
+
+        fetch(`${API_URL}/admin/logout`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+                'Authorization': 'Bearer ' + tokenLogout
+            }
+        }).catch(() => {});
+
+        document.getElementById('admin-panel').classList.add('hidden');
+        document.getElementById('admin-panel').classList.remove('flex');
+        document.getElementById('login-screen').classList.remove('hidden');
+        document.getElementById('login-email').value = '';
+        document.getElementById('login-password').value = '';
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        await detectarPortaBackend();
+
+        const token = localStorage.getItem('admin_token');
+        if (token) {
+            try {
+                const resp = await fetch(`${API_URL}/admin/me`, {
+                    headers: {
+                        'Authorization': 'Bearer ' + token,
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include'
+                });
+                const data = await resp.json();
+                if (resp.ok && data.success) {
+                    mostrarPainel(data.user.nome);
+                    return;
+                }
+            } catch (e) {}
+            localStorage.removeItem('admin_token');
+        }
+    });
+    </script>
+
+    <script src="js/admin.js"></script>
+</body>
+</html>

@@ -1,0 +1,74 @@
+services:
+  # ============================================
+  # MySQL 8.0 - Banco de Dados
+  # ============================================
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: pastelaria
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./backend/database/init-production.sql:/docker-entrypoint-initdb.d/01-init.sql
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ============================================
+  # Flask Backend + Frontend
+  # ============================================
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DB_HOST: mysql
+      DB_NAME: pastelaria
+      DB_USER: root
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_PORT: 3306
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      MERCADOPAGO_ACCESS_TOKEN: ${MERCADOPAGO_ACCESS_TOKEN}
+      WAHA_API_URL: http://waha:3000/api
+      WAHA_API_KEY: ${WAHA_API_KEY}
+      WEBHOOK_PUBLIC_URL: ${WEBHOOK_PUBLIC_URL}
+      FLASK_SECRET_KEY: ${FLASK_SECRET_KEY}
+      FLASK_DEBUG: "false"
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-*}
+      N8N_API_KEY: ${N8N_API_KEY:-}
+    ports:
+      - "5000:5000"
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  # ============================================
+  # WAHA - WhatsApp HTTP API
+  # ============================================
+  waha:
+    image: devlikeapro/waha:latest
+    environment:
+      WAHA_API_KEY: ${WAHA_API_KEY}
+      WAHA_DASHBOARD_NO_PASSWORD: "true"
+      WHATSAPP_SWAGGER_NO_PASSWORD: "true"
+      WHATSAPP_DEFAULT_ENGINE: GOWS
+    volumes:
+      - waha_sessions:/app/.sessions
+      - waha_media:/app/.media
+    ports:
+      - "3001:3000"
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+volumes:
+  mysql_data:
+  waha_sessions:
+  waha_media:

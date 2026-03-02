@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pastelão Brothers - Faça seu Pedido Online</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="bg-orange-50 text-gray-800">
+    
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+
+    <!-- Modal Endereço Entrega -->
+    <div id="endereco-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+        <div class="bg-white rounded-lg p-8 max-w-md w-full mx-4 shadow-2xl">
+            <h2 class="text-2xl font-bold mb-6 text-gray-800">
+                <i class="fas fa-map-marker-alt text-orange-600 mr-2"></i>
+                Endereço de Entrega
+            </h2>
+            
+            <div class="mb-6">
+                <label class="flex items-center cursor-pointer mb-4 p-4 border-2 border-orange-200 rounded-lg hover:border-orange-400 transition" onclick="document.getElementById('retirada-local').checked = true; document.getElementById('endereco-form').classList.add('hidden');">
+                    <input type="radio" name="tipo-entrega" value="retirada" id="retirada-local" class="mr-3 w-5 h-5 text-orange-600" checked>
+                    <div class="flex-1">
+                        <div class="font-bold text-gray-800">
+                            <i class="fas fa-store text-orange-600 mr-2"></i>
+                            Retirar no Local
+                        </div>
+                        <div class="text-sm text-gray-600 mt-1">Você retira seu pedido na loja</div>
+                    </div>
+                </label>
+                
+                <label class="flex items-center cursor-pointer p-4 border-2 border-gray-200 rounded-lg hover:border-orange-400 transition" onclick="document.getElementById('entrega-domicilio').checked = true; document.getElementById('endereco-form').classList.remove('hidden');">
+                    <input type="radio" name="tipo-entrega" value="entrega" id="entrega-domicilio" class="mr-3 w-5 h-5 text-orange-600">
+                    <div class="flex-1">
+                        <div class="font-bold text-gray-800">
+                            <i class="fas fa-truck text-orange-600 mr-2"></i>
+                            Entrega em Domicílio
+                        </div>
+                        <div class="text-sm text-gray-600 mt-1">Entregamos no seu endereço</div>
+                    </div>
+                </label>
+            </div>
+            
+            <div id="endereco-form" class="hidden mb-6">
+                <label class="block text-gray-700 font-semibold mb-3">Endereço Completo *</label>
+                
+                <div class="mb-3">
+                    <label class="block text-gray-600 text-sm mb-1">Rua *</label>
+                    <input type="text" id="endereco-rua" placeholder="Nome da rua" required class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
+                </div>
+                
+                <div class="grid grid-cols-2 gap-3 mb-3">
+                    <div>
+                        <label class="block text-gray-600 text-sm mb-1">Número *</label>
+                        <input type="text" id="endereco-numero" placeholder="Nº" required class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
+                    </div>
+                    <div>
+                        <label class="block text-gray-600 text-sm mb-1">Complemento</label>
+                        <input type="text" id="endereco-complemento" placeholder="Apt, Bloco, etc" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="block text-gray-600 text-sm mb-1">Bairro *</label>
+                    <input type="text" id="endereco-bairro" placeholder="Nome do bairro" required class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
+                </div>
+                
+                <div>
+                    <label class="block text-gray-600 text-sm mb-1">Outro</label>
+                    <input type="text" id="endereco-outro" placeholder="CEP, referência ou outra informação relevante" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
+                </div>
+            </div>
+            
+            <div class="flex gap-3">
+                <button onclick="fecharModalEndereco()" class="flex-1 bg-gray-200 text-gray-800 py-3 rounded-lg font-bold hover:bg-gray-300 transition">
+                    Cancelar
+                </button>
+                <button onclick="confirmarEndereco()" class="flex-1 bg-orange-600 text-white py-3 rounded-lg font-bold hover:bg-orange-700 transition">
+                    <i class="fas fa-check mr-2"></i>
+                    Confirmar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Método de Pagamento -->
+    <div id="metodo-pagamento-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+        <div class="bg-white rounded-lg p-8 max-w-md w-full mx-4 shadow-2xl">
+            <h2 class="text-2xl font-bold mb-6 text-gray-800">
+                <i class="fas fa-credit-card text-orange-600 mr-2"></i>
+                Escolha a Forma de Pagamento
+            </h2>
+            
+            <div class="space-y-4 mb-6">
+                <label class="flex items-center cursor-pointer p-4 border-2 border-gray-200 rounded-lg hover:border-orange-400 transition" onclick="selecionarMetodoPagamento('dinheiro')">
+                    <input type="radio" name="metodo-pagamento" value="dinheiro" class="mr-3 w-5 h-5 text-orange-600">
+                    <div class="flex-1">
+                        <div class="font-bold text-gray-800">
+                            <i class="fas fa-money-bill-wave text-green-600 mr-2"></i>
+                            1 - Dinheiro
+                        </div>
+                        <div class="text-sm text-gray-600 mt-1">Pagamento na entrega/retirada</div>
+                    </div>
+                </label>
+                
+                <label class="flex items-center cursor-pointer p-4 border-2 border-gray-200 rounded-lg hover:border-orange-400 transition" onclick="selecionarMetodoPagamento('pix')">
+                    <input type="radio" name="metodo-pagamento" value="pix" class="mr-3 w-5 h-5 text-orange-600">
+                    <div class="flex-1">
+                        <div class="font-bold text-gray-800">
+                            <i class="fas fa-qrcode text-blue-600 mr-2"></i>
+                            2 - Pix
+                        </div>
+                        <div class="text-sm text-gray-600 mt-1">Pagamento instantâneo via QR code</div>
+                    </div>
+                </label>
+                
+                <label class="flex items-center cursor-pointer p-4 border-2 border-gray-200 rounded-lg hover:border-orange-400 transition" onclick="selecionarMetodoPagamento('cartao')">
+                    <input type="radio" name="metodo-pagamento" value="cartao" class="mr-3 w-5 h-5 text-orange-600">
+                    <div class="flex-1">
+                        <div class="font-bold text-gray-800">
+                            <i class="fas fa-credit-card text-purple-600 mr-2"></i>
+                            3 - Cartão
+                        </div>
+                        <div class="text-sm text-gray-600 mt-1">Cartão de crédito ou débito</div>
+                    </div>
+                </label>
+            </div>
+            
+            <div class="flex gap-3">
+                <button onclick="fecharModalMetodoPagamento()" class="flex-1 bg-gray-200 text-gray-800 py-3 rounded-lg font-bold hover:bg-gray-300 transition">
+                    Cancelar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Pagamento em Dinheiro -->
+    <div id="dinheiro-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+        <div class="bg-white rounded-lg p-8 max-w-md w-full mx-4 shadow-2xl">
+            <h2 class="text-2xl font-bold mb-6 text-gray-800">
+                <i class="fas fa-money-bill-wave text-green-600 mr-2"></i>
+                Pagamento em Dinheiro
+            </h2>
+            
+            <div class="mb-6">
+                <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                    <p class="text-green-800 font-bold text-lg mb-1">Total do Pedido:</p>
+                    <p id="dinheiro-total" class="text-green-600 text-2xl font-bold">R$ 0,00</p>
+                </div>
+                
+                <div class="mb-4">
+                    <label class="block text-gray-700 font-semibold mb-2">
+                        Valor que você vai pagar:
+                    </label>
+                    <input 
+                        type="number" 
+                        id="dinheiro-troco" 
+                        step="0.01" 
+                        min="0"
+                        placeholder="0,00"
+                        oninput="calcularTroco()"
+                        class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 text-lg"
+                    >
+                </div>
+                
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <p class="text-blue-800 font-semibold mb-1">Troco:</p>
+                    <p id="dinheiro-troco-resultado" class="text-green-600 font-bold text-lg">R$ 0,00</p>
+                </div>
+            </div>
+            
+            <div class="flex gap-3">
+                <button onclick="fecharModalDinheiro()" class="flex-1 bg-gray-200 text-gray-800 py-3 rounded-lg font-bold hover:bg-gray-300 transition">
+                    Cancelar
+                </button>
+                <button onclick="confirmarPagamentoDinheiro()" class="flex-1 bg-green-600 text-white py-3 rounded-lg font-bold hover:bg-green-700 transition">
+                    <i class="fas fa-check mr-2"></i>
+                    Confirmar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Confirmar Exclusão de Pedido -->
+    <div id="confirmar-exclusao-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+        <div class="bg-white rounded-lg p-8 max-w-md w-full mx-4 shadow-2xl animate-fade-in">
+            <div class="text-center mb-6">
+                <div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-100 mb-4">
+                    <i class="fas fa-exclamation-triangle text-red-600 text-3xl"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-800 mb-2">
+                    Excluir Pedido?
+                </h2>
+                <p class="text-gray-600">
+                    Tem certeza que deseja excluir este pedido?
+                </p>
+                <p class="text-sm text-red-600 font-semibold mt-2">
+                    Esta ação não pode ser desfeita!
+                </p>
+            </div>
+            
+            <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
+                <div class="flex items-center justify-between">
+                    <span class="text-gray-700 font-semibold">Pedido #<span id="exclusao-pedido-id"></span></span>
+                    <span class="text-gray-600" id="exclusao-pedido-total"></span>
+                </div>
+            </div>
+            
+            <div class="flex gap-3">
+                <button onclick="fecharModalExclusao()" class="flex-1 bg-gray-200 text-gray-800 py-3 rounded-lg font-bold hover:bg-gray-300 transition">
+                    <i class="fas fa-times mr-2"></i>
+                    Cancelar
+                </button>
+                <button onclick="confirmarExclusaoPedido()" class="flex-1 bg-red-600 text-white py-3 rounded-lg font-bold hover:bg-red-700 transition">
+                    <i class="fas fa-trash mr-2"></i>
+                    Sim, Excluir
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navegação -->
+    <nav class="bg-white shadow-md sticky top-0 z-50">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-2">
+                <img src="/img/logo.png" class="w-9 h-9 rounded-full object-cover" alt="Logo">
+                <span class="text-xl sm:text-2xl font-bold text-orange-600">Pastelão<span class="text-yellow-500">Brothers</span></span>
+            </div>
+
+            <!-- Mobile: ícones compactos -->
+            <div class="flex md:hidden items-center gap-2">
+                <div id="mobile-user-logado" class="hidden">
+                    <button onclick="toggleMobileMenu()" class="flex items-center gap-1.5 bg-orange-50 px-2.5 py-1.5 rounded-full">
+                        <i class="fas fa-user-circle text-orange-500"></i>
+                        <span id="user-name-header" class="text-xs font-semibold text-orange-700 max-w-[60px] truncate"></span>
+                    </button>
+                </div>
+                <div id="mobile-user-deslogado" class="">
+                    <button onclick="showLoginModal()" class="flex items-center gap-1 bg-orange-600 text-white px-3 py-1.5 rounded-full text-xs font-bold">
+                        <i class="fas fa-sign-in-alt"></i>Entrar
+                    </button>
+                </div>
+                <button onclick="togglePedidos()" class="relative" title="Meus Pedidos">
+                    <i class="fas fa-clipboard-list text-xl text-orange-600"></i>
+                </button>
+                <button onclick="toggleCarrinho()" class="relative">
+                    <i class="fas fa-shopping-cart text-xl text-orange-600"></i>
+                    <span id="cart-count-mobile" class="cart-badge">0</span>
+                </button>
+                <button onclick="toggleMobileMenu()" class="text-gray-600 hover:text-orange-600 transition">
+                    <i class="fas fa-bars text-xl"></i>
+                </button>
+            </div>
+
+            <!-- Desktop: menu completo -->
+            <div class="hidden md:flex space-x-6 font-semibold items-center">
+                <a href="#inicio" class="hover:text-orange-600 transition">Início</a>
+                <a href="#cardapio" class="hover:text-orange-600 transition">Cardápio</a>
+                <div id="user-menu" class="hidden">
+                    <span id="user-name" class="text-orange-600"></span>
+                    <button onclick="logout()" class="ml-4 text-red-600 hover:text-red-700">Sair</button>
+                </div>
+                <div id="login-buttons" class="flex space-x-4">
+                    <button onclick="showLoginModal()" class="text-orange-600 hover:text-orange-700">Entrar</button>
+                    <button onclick="showRegisterModal()" class="bg-orange-600 text-white px-4 py-2 rounded-full hover:bg-orange-700 transition">Cadastrar</button>
+                </div>
+                <div class="relative flex items-center gap-3">
+                    <a href="admin.html" title="Painel Admin" class="text-slate-500 hover:text-orange-600 transition-colors">
+                        <i class="fas fa-user-shield text-xl"></i>
+                    </a>
+                    <button onclick="togglePedidos()" class="relative" title="Meus Pedidos">
+                        <i class="fas fa-clipboard-list text-2xl text-orange-600"></i>
+                    </button>
+                    <button onclick="toggleCarrinho()" class="relative">
+                        <i class="fas fa-shopping-cart text-2xl text-orange-600"></i>
+                        <span id="cart-count" class="cart-badge">0</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+        <!-- Menu mobile dropdown -->
+        <div id="mobile-menu" class="hidden md:hidden border-t border-gray-100 bg-white px-4 pb-4 pt-2 space-y-2">
+            <a href="#inicio" onclick="toggleMobileMenu()" class="block py-2 text-gray-700 font-semibold hover:text-orange-600">Início</a>
+            <a href="#cardapio" onclick="toggleMobileMenu()" class="block py-2 text-gray-700 font-semibold hover:text-orange-600">Cardápio</a>
+            <div id="user-menu-mobile" class="hidden py-2">
+                <span id="user-name-mobile" class="text-orange-600 font-semibold"></span>
+                <button onclick="logout(); toggleMobileMenu()" class="ml-4 text-red-600 hover:text-red-700 text-sm">Sair</button>
+            </div>
+            <div id="login-buttons-mobile" class="flex gap-3 py-2">
+                <button onclick="showLoginModal(); toggleMobileMenu()" class="text-orange-600 font-semibold">Entrar</button>
+                <button onclick="showRegisterModal(); toggleMobileMenu()" class="bg-orange-600 text-white px-4 py-1.5 rounded-full text-sm font-bold">Cadastrar</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Modal Login -->
+    <div id="login-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+        <div class="bg-white rounded-lg p-8 max-w-md w-full mx-4">
+            <h2 class="text-2xl font-bold mb-4">Entrar</h2>
+            <form onsubmit="handleLogin(event)">
+                <input type="email" id="login-email" placeholder="Email" required class="w-full p-3 border rounded mb-4">
+                <input type="password" id="login-senha" placeholder="Senha" required class="w-full p-3 border rounded mb-4">
+                <button type="submit" class="w-full bg-orange-600 text-white py-3 rounded-lg font-bold hover:bg-orange-700">Entrar</button>
+            </form>
+            <button onclick="closeModals()" class="mt-4 text-gray-600">Cancelar</button>
+        </div>
+    </div>
+
+    <!-- Modal Cadastro -->
+    <div id="register-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+        <div class="bg-white rounded-lg p-8 max-w-md w-full mx-4">
+            <h2 class="text-2xl font-bold mb-4">Cadastrar</h2>
+            <form onsubmit="handleRegister(event)">
+                <input type="text" id="reg-nome" placeholder="Nome completo" required class="w-full p-3 border rounded mb-4">
+                <input type="email" id="reg-email" placeholder="Email" required class="w-full p-3 border rounded mb-4">
+                <input type="tel" id="reg-telefone" placeholder="Telefone" class="w-full p-3 border rounded mb-4">
+                <input type="password" id="reg-senha" placeholder="Senha" required class="w-full p-3 border rounded mb-4">
+                <button type="submit" class="w-full bg-orange-600 text-white py-3 rounded-lg font-bold hover:bg-orange-700">Cadastrar</button>
+            </form>
+            <button onclick="closeModals()" class="mt-4 text-gray-600">Cancelar</button>
+        </div>
+    </div>
+
+    <!-- Sidebar Pedidos -->
+    <div id="pedidos-sidebar" class="fixed right-0 top-0 h-full w-full sm:w-96 bg-white shadow-2xl z-40 transform translate-x-full transition-transform duration-300 overflow-y-auto">
+        <div class="p-6">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold">Meus Pedidos</h2>
+                <button onclick="togglePedidos()" class="text-2xl">&times;</button>
+            </div>
+            <div id="pedidos-container">
+                <div class="text-center py-8">
+                    <i class="fas fa-spinner fa-spin text-gray-400 text-4xl mb-4"></i>
+                    <p class="text-gray-600">Carregando pedidos...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Carrinho Lateral -->
+    <div id="carrinho-sidebar" class="fixed right-0 top-0 h-full w-full sm:w-96 bg-white shadow-2xl z-40 transform translate-x-full transition-transform duration-300 overflow-y-auto">
+        <div class="p-6">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold">Carrinho</h2>
+                <button onclick="toggleCarrinho()" class="text-2xl">&times;</button>
+            </div>
+            <div id="carrinho-items"></div>
+            <div class="mt-6 border-t pt-4">
+                <div class="flex justify-between text-xl font-bold mb-4">
+                    <span>Total:</span>
+                    <span id="carrinho-total">R$ 0,00</span>
+                </div>
+                <button onclick="finalizarPedido()" class="w-full bg-orange-600 text-white py-3 rounded-lg font-bold hover:bg-orange-700" id="btn-finalizar" disabled>
+                    Finalizar Pedido
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hero Section -->
+    <header id="inicio" class="hero-bg h-[40vh] sm:h-[60vh] flex items-center justify-center text-center text-white px-4">
+        <div class="max-w-3xl">
+            <h1 class="text-3xl md:text-6xl font-bold mb-3 md:mb-4">O Melhor Pastel da Região!</h1>
+            <p class="text-base md:text-xl mb-6 md:mb-8 opacity-90">Massa artesanal sequinha e recheio de ponta a ponta. Peça já o seu!</p>
+            <a href="#cardapio" class="bg-yellow-500 text-gray-900 px-8 py-4 rounded-full font-bold text-lg hover:bg-yellow-400 transition transform hover:scale-105 inline-block">
+                <i class="fas fa-utensils mr-2"></i> Ver Cardápio
+            </a>
+        </div>
+    </header>
+
+    <!-- Cardápio -->
+    <section id="cardapio" class="py-16 bg-white">
+        <div class="container mx-auto px-4">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-2">Nosso Cardápio Completo</h2>
+                <div class="w-20 h-1 bg-orange-600 mx-auto mb-4"></div>
+                <p class="text-gray-600">Explore nossas delícias fritas na hora!</p>
+            </div>
+            <div id="produtos-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6 items-start">
+                <!-- Produtos serão carregados aqui -->
+            </div>
+        </div>
+    </section>
+
+    <!-- Modal Pagamento QR Code -->
+    <div id="pagamento-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+        <div class="bg-white rounded-lg p-8 max-w-md w-full mx-4 shadow-2xl">
+            <div class="text-center">
+                <h2 class="text-2xl font-bold mb-4 text-gray-800">
+                    <i class="fas fa-qrcode text-orange-600 mr-2"></i>
+                    Finalizar Pagamento
+                </h2>
+                <p class="text-gray-600 mb-6">Escaneie o QR code para pagar ou clique em "Pagar no Site"</p>
+                
+                <div class="bg-white p-4 rounded-lg border-2 border-gray-200 mb-4 flex justify-center">
+                    <div id="qr-code-container">
+                        <img id="qr-code-image" src="" alt="QR Code" class="w-64 h-64 mx-auto">
+                    </div>
+                </div>
+                
+                <div class="mb-4">
+                    <label class="block text-gray-700 font-semibold mb-2">Ou copie o código Pix:</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="pix-code" readonly class="flex-1 p-3 border rounded-lg bg-gray-50 font-mono text-sm">
+                        <button onclick="copiarPixCode()" class="bg-orange-600 text-white px-4 py-3 rounded-lg hover:bg-orange-700 transition">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-4">
+                    <p class="text-orange-800 font-bold text-lg mb-1" id="pagamento-total">R$ 0,00</p>
+                    <p class="text-orange-600 text-sm">Pedido #<span id="pagamento-pedido-id">-</span></p>
+                </div>
+                
+                <div class="flex gap-3">
+                    <button onclick="fecharModalPagamento()" class="flex-1 bg-gray-200 text-gray-800 py-3 rounded-lg font-bold hover:bg-gray-300 transition">
+                        Fechar
+                    </button>
+                    <button onclick="abrirMercadoPago()" class="flex-1 bg-orange-600 text-white py-3 rounded-lg font-bold hover:bg-orange-700 transition">
+                        <i class="fas fa-external-link-alt mr-2"></i>
+                        Pagar no Site
+                    </button>
+                </div>
+                
+                <p id="pagamento-status-msg" class="text-gray-500 text-xs mt-4">
+                    <i class="fas fa-info-circle mr-1"></i>
+                    Verificando status do pagamento automaticamente...
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-white py-12">
+        <div class="container mx-auto px-4 text-center">
+            <p>&copy; 2024 Pastelão Brothers. Todos os direitos reservados.</p>
+        </div>
+    </footer>
+
+    <!-- Scripts JavaScript (ordem importante) -->
+    <script src="js/api.js"></script>
+    <script src="js/toast.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/carrinho.js"></script>
+    <script src="js/pedidos.js"></script>
+    <script src="js/pagamento.js"></script>
+    <script src="js/endereco.js"></script>
+    <script src="js/produtos.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>

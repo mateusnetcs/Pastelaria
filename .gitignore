@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# Flask
+instance/
+.webassets-cache
+
+# Logs
+logs/
+*.log
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Projeto específico
+index_old_backup.html
+index..html
+index_completo.html
+logs_flask.txt
+
+# Scripts locais (Windows)
+INICIAR SERVIDOR.bat
+iniciar.ps1
+test_endpoint_porta5001.ps1
+docker-compose-minimal.yml
+
+# Pasta duplicada do Mercado Pago (raiz)
+/Mercado pago/
+
+# Sensitive
+.env
+*.env
+config.ini
+secrets.json
