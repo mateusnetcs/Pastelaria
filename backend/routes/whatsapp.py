@@ -23,6 +23,7 @@ _message_buffers = {}
 _buffer_timers = {}
 _buffer_lock = threading.Lock()
 _message_ids = {}
+_processed_ids = set()
 
 
 def get_db_connection():
@@ -125,10 +126,20 @@ def webhook_waha():
         if '@newsletter' in chat_id:
             return jsonify({"status": "ignored", "reason": "newsletter"}), 200
 
-        print(f"[webhook] Chat recebido: {chat_id}", file=sys.stderr)
+        print(f"[webhook] Chat recebido: {chat_id} (event={event})", file=sys.stderr)
 
         mensagem_texto = payload.get('body', '').strip()
         message_id = payload.get('id', '')
+
+        # Deduplicação: ignorar message_id já processado
+        if message_id:
+            with _buffer_lock:
+                all_ids = []
+                for ids in _message_ids.values():
+                    all_ids.extend(ids)
+                if message_id in all_ids or message_id in _processed_ids:
+                    print(f"[webhook] Mensagem {message_id} já processada, ignorando duplicata", file=sys.stderr)
+                    return jsonify({"status": "ignored", "reason": "duplicate"}), 200
 
         has_media = payload.get('hasMedia', False)
         media = payload.get('media')
@@ -195,8 +206,12 @@ def _processar_buffer(chat_id):
     """Processa todas as mensagens acumuladas de um chat após o debounce."""
     with _buffer_lock:
         mensagens = _message_buffers.pop(chat_id, [])
-        _message_ids.pop(chat_id, [])
+        ids = _message_ids.pop(chat_id, [])
         _buffer_timers.pop(chat_id, None)
+        for mid in ids:
+            _processed_ids.add(mid)
+        if len(_processed_ids) > 500:
+            _processed_ids.clear()
 
     if not mensagens:
         return
