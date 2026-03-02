@@ -17,7 +17,7 @@ from config import DB_CONFIG, WAHA_API_URL, WAHA_API_KEY, OPENAI_API_KEY, OPENAI
 
 whatsapp_bp = Blueprint('whatsapp', __name__)
 
-DEBOUNCE_SECONDS = 10
+DEBOUNCE_SECONDS = 6
 
 _message_buffers = {}
 _buffer_timers = {}
