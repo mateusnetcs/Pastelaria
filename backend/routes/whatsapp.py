@@ -38,8 +38,11 @@ def get_db_connection():
 # WEBHOOK - Recebe mensagens do WAHA e processa com IA
 # =====================================================================
 
-@whatsapp_bp.route('/api/whatsapp/webhook', methods=['POST'])
+@whatsapp_bp.route('/api/whatsapp/webhook', methods=['GET', 'POST'])
 def webhook_waha():
+    if request.method == 'GET':
+        return jsonify({"status": "ok", "webhook": "pastelaria"}), 200
+
     """
     Recebe mensagens do WAHA e responde usando a IA.
 
@@ -59,9 +62,11 @@ def webhook_waha():
     try:
         data = request.json
         if not data:
+            print("[webhook] Recebido POST sem JSON", file=sys.stderr)
             return jsonify({"status": "ok"}), 200
 
         event = data.get('event', '')
+        print(f"[webhook] RECEBIDO event={event!r} keys={list(data.keys())}", file=sys.stderr)
 
         if event == 'call.received':
             payload = data.get('payload', {})
@@ -103,10 +108,28 @@ def webhook_waha():
 
             return jsonify({"status": "call_rejected"}), 200
 
-        if event != 'message':
+        if event not in ('message', 'message.any', 'messages.upsert'):
+            print(f"[webhook] Evento ignorado: {event!r}", file=sys.stderr)
             return jsonify({"status": "ignored", "reason": "not a message event"}), 200
 
         payload = data.get('payload', {})
+        if event == 'messages.upsert':
+            evo_data = data.get('data', {})
+            if isinstance(evo_data, list):
+                evo_data = evo_data[0] if evo_data else {}
+            evo_key = evo_data.get('key', {})
+            if evo_key.get('fromMe', False):
+                return jsonify({"status": "ignored", "reason": "own message"}), 200
+            msg_obj = evo_data.get('message') or {}
+            body = msg_obj.get('conversation') or msg_obj.get('extendedTextMessage', {}).get('text') or ''
+            payload = {
+                'from': evo_key.get('remoteJid', ''),
+                'chatId': evo_key.get('remoteJid', ''),
+                'id': evo_key.get('id', ''),
+                'fromMe': evo_key.get('fromMe', False),
+                'body': body
+            }
+            print(f"[webhook] Evolution API: chat_id={payload['from']} body={body[:50]!r}...", file=sys.stderr)
 
         # Ignorar mensagens enviadas por nós mesmos
         if payload.get('fromMe', False):
