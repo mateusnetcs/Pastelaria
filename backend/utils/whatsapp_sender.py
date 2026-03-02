@@ -7,7 +7,7 @@ import sys
 import time
 import random
 
-from config import WAHA_API_URL, WAHA_API_KEY
+from config import WAHA_API_URL, WAHA_API_KEY, WAHA_SESSION
 
 EMOJIS_REACAO = ["👍", "😊", "✨", "🙏", "💛", "🥟", "👀", "🔥"]
 
@@ -27,7 +27,7 @@ def reagir_mensagem(chat_id, message_id, emoji=None):
             "chatId": chat_id,
             "messageId": message_id,
             "reaction": emoji,
-            "session": "default"
+            "session": WAHA_SESSION
         }
         response = requests.post(url, json=payload, headers=headers, timeout=5)
         if response.status_code in (200, 201):
@@ -104,7 +104,7 @@ def enviar_mensagem_texto(chat_id, mensagem):
         payload = {
             "chatId": chat_id,
             "text": mensagem,
-            "session": "default"
+            "session": WAHA_SESSION
         }
         
         response = requests.post(url, json=payload, headers=headers, timeout=10)
@@ -162,7 +162,7 @@ def enviar_pix_completo(chat_id, pix_code, valor_total, pedido_id):
         }
         payload = {
             "chatId": chat_id,
-            "session": "default",
+            "session": WAHA_SESSION,
             "buttons": [
                 {"id": "ja_paguei", "text": "Já paguei!"}
             ],
@@ -238,7 +238,7 @@ def enviar_imagem_base64(chat_id, imagem_base64, legenda=""):
             "chatId": chat_id,
             "image": imagem_base64,
             "caption": legenda,
-            "session": "default"
+            "session": WAHA_SESSION
         }
         
         response = requests.post(url, json=payload, headers=headers, timeout=10)

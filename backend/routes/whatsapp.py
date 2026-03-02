@@ -13,7 +13,7 @@ import re
 import threading
 import time
 
-from config import DB_CONFIG, WAHA_API_URL, WAHA_API_KEY, OPENAI_API_KEY, OPENAI_MODEL, WEBHOOK_PUBLIC_URL
+from config import DB_CONFIG, WAHA_API_URL, WAHA_API_KEY, WAHA_SESSION, OPENAI_API_KEY, OPENAI_MODEL, WEBHOOK_PUBLIC_URL
 
 whatsapp_bp = Blueprint('whatsapp', __name__)
 
@@ -46,7 +46,7 @@ def webhook_waha():
     O WAHA envia payloads com estrutura:
     {
         "event": "message",
-        "session": "default",
+        "session": WAHA_SESSION,
         "payload": {
             "id": "...",
             "from": "5592999999999@c.us",
@@ -76,7 +76,7 @@ def webhook_waha():
 
                 call_id = payload.get('id', '')
                 req.post(
-                    f"{WAHA_API_URL.replace('/api', '')}/api/default/calls/reject",
+                    f"{WAHA_API_URL.replace('/api', '')}/api/{WAHA_SESSION}/calls/reject",
                     headers=reject_headers,
                     json={"callId": call_id},
                     timeout=5

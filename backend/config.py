@@ -18,6 +18,7 @@ DB_CONFIG = {
 
 WAHA_API_URL = os.getenv('WAHA_API_URL', 'http://localhost:3001/api')
 WAHA_API_KEY = os.getenv('WAHA_API_KEY', '')
+WAHA_SESSION = os.getenv('WAHA_SESSION', 'padrão')
 
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
 OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-4o-mini')
