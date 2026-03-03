@@ -110,7 +110,7 @@ def webhook_waha():
 
             return jsonify({"status": "call_rejected"}), 200
 
-        if event not in ('message', 'message.any', 'messages.upsert'):
+        if event not in ('message', 'messages.upsert'):
             print(f"[webhook] Evento ignorado: {event!r}", file=sys.stderr)
             return jsonify({"status": "ignored", "reason": "not a message event"}), 200
 
@@ -167,8 +167,10 @@ def webhook_waha():
                     return jsonify({"status": "ignored", "reason": "duplicate"}), 200
 
         # Deduplicação 2: ignorar mesmo conteúdo (chat_id + texto) em janela curta
-        # WAHA/Evolution pode enviar message + message.any ou messages.upsert com IDs diferentes
-        content_key = f"{chat_id}|{mensagem_texto[:300]}"
+        # WAHA pode enviar message + message.any com IDs diferentes; normalizar para pegar variações
+        chat_num = chat_id.split('@')[0] if '@' in chat_id else chat_id
+        texto_norm = ' '.join(mensagem_texto.lower().strip().split())[:300]
+        content_key = f"{chat_num}|{texto_norm}"
         now = time.time()
         with _buffer_lock:
             # Limpar entradas antigas
