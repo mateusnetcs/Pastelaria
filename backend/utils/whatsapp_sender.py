@@ -212,6 +212,53 @@ def enviar_link_cartao(chat_id, link_pagamento, valor_total, pedido_id):
         return {'success': False, 'error': str(e)}
 
 
+def enviar_cardapio_lista(chat_id, db_config):
+    """
+    Envia o cardápio como lista organizada por categoria (Salgados, Doces, Bebidas).
+    Cada categoria em mensagem separada para melhor leitura.
+    """
+    import time
+    try:
+        from ai.tools import listar_produtos
+        from config import WEBHOOK_PUBLIC_URL
+
+        res = listar_produtos(db_config)
+        if res.get('erro'):
+            return False
+        produtos = res.get('produtos', [])
+
+        categorias = {'Salgado': '🥟 *SALGADOS*', 'Doce': '🍬 *DOCES*', 'Bebida': '🥤 *BEBIDAS*'}
+        por_cat = {}
+        for p in produtos:
+            cat = p.get('categoria', 'Outros')
+            if cat not in por_cat:
+                por_cat[cat] = []
+            por_cat[cat].append(p)
+
+        url_base = (WEBHOOK_PUBLIC_URL or "https://pastelaobhoters.chatboot.cloud").rstrip('/')
+
+        # Intro
+        enviar_mensagem_texto(chat_id, "📋 *Cardápio Pastelão Brothers*\n\nAqui estão nossos produtos:")
+        time.sleep(0.6)
+
+        for cat_key, titulo in categorias.items():
+            if cat_key not in por_cat or not por_cat[cat_key]:
+                continue
+            linhas = [titulo, ""]
+            for p in por_cat[cat_key]:
+                preco = f"R$ {float(p['preco']):.2f}".replace('.', ',')
+                linhas.append(f"• *{p['nome']}* – {preco}")
+            enviar_mensagem_texto(chat_id, "\n".join(linhas))
+            time.sleep(0.5)
+
+        enviar_mensagem_texto(chat_id, f"Se preferir, acesse o cardápio online com fotos:\n🌐 {url_base}\n\nQualquer dúvida é só perguntar! 😊")
+        print(f"[waha] Cardápio em lista enviado para {chat_id}", file=sys.stderr)
+        return True
+    except Exception as e:
+        print(f"[waha] Erro ao enviar cardápio lista: {e}", file=sys.stderr)
+        return False
+
+
 def enviar_cardapio_foto(chat_id):
     """
     Envia a foto do cardápio e o link do sistema online.
