@@ -18,12 +18,14 @@ from config import DB_CONFIG, WAHA_API_URL, WAHA_API_KEY, WAHA_SESSION, OPENAI_A
 whatsapp_bp = Blueprint('whatsapp', __name__)
 
 DEBOUNCE_SECONDS = 6
+DEDUP_WINDOW_SECONDS = 25
 
 _message_buffers = {}
 _buffer_timers = {}
 _buffer_lock = threading.Lock()
 _message_ids = {}
 _processed_ids = set()
+_recent_by_content = {}  # hash(chat_id|texto) -> timestamp (dedup por conteúdo)
 
 
 def get_db_connection():
@@ -154,7 +156,7 @@ def webhook_waha():
         mensagem_texto = payload.get('body', '').strip()
         message_id = payload.get('id', '')
 
-        # Deduplicação: ignorar message_id já processado
+        # Deduplicação 1: ignorar message_id já processado
         if message_id:
             with _buffer_lock:
                 all_ids = []
@@ -163,6 +165,20 @@ def webhook_waha():
                 if message_id in all_ids or message_id in _processed_ids:
                     print(f"[webhook] Mensagem {message_id} já processada, ignorando duplicata", file=sys.stderr)
                     return jsonify({"status": "ignored", "reason": "duplicate"}), 200
+
+        # Deduplicação 2: ignorar mesmo conteúdo (chat_id + texto) em janela curta
+        # WAHA/Evolution pode enviar message + message.any ou messages.upsert com IDs diferentes
+        content_key = f"{chat_id}|{mensagem_texto[:300]}"
+        now = time.time()
+        with _buffer_lock:
+            # Limpar entradas antigas
+            expired = [k for k, ts in _recent_by_content.items() if now - ts > DEDUP_WINDOW_SECONDS]
+            for k in expired:
+                del _recent_by_content[k]
+            if content_key in _recent_by_content:
+                print(f"[webhook] Conteúdo duplicado em janela de {DEDUP_WINDOW_SECONDS}s, ignorando", file=sys.stderr)
+                return jsonify({"status": "ignored", "reason": "duplicate_content"}), 200
+            _recent_by_content[content_key] = now
 
         has_media = payload.get('hasMedia', False)
         media = payload.get('media')
