@@ -76,8 +76,16 @@ TOOLS_DEFINITIONS = [
     {
         "type": "function",
         "function": {
+            "name": "enviar_cardapio_foto",
+            "description": "Envia a foto do cardápio e o link para pedir online. Use quando o cliente pedir cardápio, menu ou quiser ver os produtos (ex: 'manda o cardápio', 'qual o cardápio', 'ver o menu').",
+            "parameters": {"type": "object", "properties": {}}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "listar_produtos",
-            "description": "Lista todos os produtos disponíveis no cardápio. Pode filtrar por categoria: Salgado, Doce ou Bebida.",
+            "description": "Lista produtos por categoria (Salgado, Doce, Bebida). Use APENAS quando o cliente perguntar sobre um item específico ou categoria, NÃO use para pedido genérico de cardápio - nesse caso use enviar_cardapio_foto.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -787,6 +795,10 @@ def executar_tool(nome_funcao, argumentos, db_config, chat_id=None):
                 db_config,
                 argumentos.get("data_nascimento")
             )
+
+        elif nome_funcao == "enviar_cardapio_foto":
+            from utils.whatsapp_sender import enviar_cardapio_foto
+            resultado = enviar_cardapio_foto(chat_id)
 
         elif nome_funcao == "listar_produtos":
             resultado = listar_produtos(db_config, argumentos.get("categoria"))
