@@ -265,12 +265,20 @@ def _processar_buffer(chat_id):
 
         # Pedido de cardápio: enviar foto + link ANTES da IA (garante envio)
         txt_lower = mensagem_combinada.lower().strip()
-        if any(p in txt_lower for p in ('cardapio', 'cardápio', 'menu', 'manda o cardápio', 'ver o cardápio')):
+        pediu_cardapio = any(p in txt_lower for p in ('cardapio', 'cardápio', 'menu'))
+        if pediu_cardapio:
             from utils.whatsapp_sender import enviar_cardapio_foto, enviar_mensagem_texto
             cardapio_res = enviar_cardapio_foto(chat_id)
             if cardapio_res.get('success'):
                 enviar_mensagem_texto(chat_id, "Pronto! Enviei o cardápio para você. 😊 Qualquer dúvida é só perguntar!")
                 print(f"[debounce] Cardápio enviado diretamente para {chat_id}", file=sys.stderr)
+                return
+            else:
+                print(f"[debounce] enviar_cardapio_foto falhou: {cardapio_res.get('erro')}", file=sys.stderr)
+                # Mesmo falhando, não mandar lista - enviar mensagem de fallback
+                from config import WEBHOOK_PUBLIC_URL
+                url = (WEBHOOK_PUBLIC_URL or "https://pastelaobhoters.chatboot.cloud").rstrip('/')
+                enviar_mensagem_texto(chat_id, f"Desculpe, tive um probleminha ao enviar a foto do cardápio. 😅\n\nVocê pode acessar nosso cardápio online aqui:\n🌐 {url}\n\nQualquer dúvida é só perguntar!")
                 return
 
         from ai.chatbot import processar_mensagem
