@@ -400,6 +400,40 @@ def listar_produtos(db_config, categoria=None):
         return {"erro": str(e)}
 
 
+def _buscar_produto_por_nome(cursor, nome_produto):
+    """
+    Busca produto com busca flexível: aceita 'pastel de queijo' para produto 'Queijo',
+    ou 'queijo' na descrição. Tenta várias estratégias.
+    """
+    if not nome_produto:
+        return None
+    nome_limpo = nome_produto.strip()
+    # 1) Busca direta: nome contém o termo
+    cursor.execute(
+        "SELECT id, nome, preco, ativo FROM produtos WHERE nome LIKE %s AND ativo = TRUE LIMIT 1",
+        (f'%{nome_limpo}%',)
+    )
+    p = cursor.fetchone()
+    if p:
+        return p
+    # 2) Extrair palavra-chave (ex: "queijo" de "pastel de queijo")
+    palavras = [w for w in nome_limpo.lower().replace(',', ' ').split() if len(w) > 2]
+    prefixos_ignorar = ('pastel', 'de', 'da', 'do', 'com', 'um', 'uma', '1x', '2x', 'x1', 'x2')
+    keywords = [w for w in palavras if w not in prefixos_ignorar]
+    for kw in keywords:
+        cursor.execute(
+            """SELECT id, nome, preco, ativo FROM produtos
+               WHERE (nome LIKE %s OR descricao LIKE %s) AND ativo = TRUE
+               ORDER BY CASE WHEN nome LIKE %s THEN 0 ELSE 1 END
+               LIMIT 1""",
+            (f'%{kw}%', f'%{kw}%', f'%{kw}%')
+        )
+        p = cursor.fetchone()
+        if p:
+            return p
+    return None
+
+
 def criar_pedido(itens, db_config, whatsapp_id=None, tipo_entrega="retirada", endereco=None,
                  cliente_id=None, nome_cliente=None):
     """Cria pedido no banco. Use cliente_id para cadastrado ou nome_cliente para visitante."""
@@ -458,26 +492,22 @@ def criar_pedido(itens, db_config, whatsapp_id=None, tipo_entrega="retirada", en
         itens_descricao = []
 
         for item in itens:
-            nome_produto = item.get('nome_produto', '')
+            nome_produto = (item.get('nome_produto') or '').strip()
             pid = item.get('produto_id')
             qtd = item.get('quantidade', 1)
 
             if nome_produto:
-                cursor.execute(
-                    "SELECT id, nome, preco, ativo FROM produtos WHERE nome LIKE %s AND ativo = TRUE LIMIT 1",
-                    (f'%{nome_produto}%',)
-                )
+                produto = _buscar_produto_por_nome(cursor, nome_produto)
             elif pid:
                 cursor.execute(
                     "SELECT id, nome, preco, ativo FROM produtos WHERE id = %s",
                     (pid,)
                 )
+                produto = cursor.fetchone()
             else:
                 cursor.close()
                 conn.close()
                 return {"erro": "Item sem nome_produto ou produto_id"}
-
-            produto = cursor.fetchone()
             if not produto:
                 cursor.close()
                 conn.close()
