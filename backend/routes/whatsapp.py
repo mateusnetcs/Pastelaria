@@ -263,6 +263,16 @@ def _processar_buffer(chat_id):
     try:
         telefone = chat_id.split('@')[0] if '@' in chat_id else chat_id
 
+        # Pedido de cardápio: enviar foto + link ANTES da IA (garante envio)
+        txt_lower = mensagem_combinada.lower().strip()
+        if any(p in txt_lower for p in ('cardapio', 'cardápio', 'menu', 'manda o cardápio', 'ver o cardápio')):
+            from utils.whatsapp_sender import enviar_cardapio_foto, enviar_mensagem_texto
+            cardapio_res = enviar_cardapio_foto(chat_id)
+            if cardapio_res.get('success'):
+                enviar_mensagem_texto(chat_id, "Pronto! Enviei o cardápio para você. 😊 Qualquer dúvida é só perguntar!")
+                print(f"[debounce] Cardápio enviado diretamente para {chat_id}", file=sys.stderr)
+                return
+
         from ai.chatbot import processar_mensagem
 
         resultado = processar_mensagem(
