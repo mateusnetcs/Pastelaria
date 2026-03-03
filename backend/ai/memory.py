@@ -54,24 +54,35 @@ def salvar_mensagem(chat_id, role, content, db_config, tool_call_id=None):
     """Salva uma mensagem no histórico."""
     conn = get_db_connection(db_config)
     if not conn:
+        print(f"[memory] Não foi possível conectar ao banco - mensagem não salva (chat_id={chat_id})", file=sys.stderr)
         return
 
     try:
         cursor = conn.cursor()
+        content_safe = (content or "")[:65535]  # TEXT limit
         cursor.execute("""
             INSERT INTO conversas (chat_id, role, content, tool_call_id)
             VALUES (%s, %s, %s, %s)
-        """, (chat_id, role, content or "", tool_call_id))
+        """, (chat_id, role, content_safe, tool_call_id))
         conn.commit()
 
-        _limpar_mensagens_antigas(cursor, chat_id)
-        conn.commit()
+        try:
+            _limpar_mensagens_antigas(cursor, chat_id)
+            conn.commit()
+        except Exception as limpeza_err:
+            print(f"[memory] Aviso: falha ao limpar mensagens antigas (chat_id={chat_id}): {limpeza_err}", file=sys.stderr)
 
         cursor.close()
         conn.close()
     except Exception as e:
-        print(f"[memory] Erro ao salvar mensagem: {e}", file=sys.stderr)
+        print(f"[memory] Erro ao salvar mensagem (chat_id={chat_id}, role={role}): {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
         if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
             conn.close()
 
 
