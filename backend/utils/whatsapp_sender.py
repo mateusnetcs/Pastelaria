@@ -215,33 +215,60 @@ def enviar_link_cartao(chat_id, link_pagamento, valor_total, pedido_id):
 def enviar_cardapio_foto(chat_id):
     """
     Envia a foto do cardápio e o link do sistema online.
-    Usa mesmo formato que PIX (enviar_imagem_base64) para compatibilidade.
+    Usa formato WAHA: file.{url|data} (422 ocorria com campo 'image').
     """
     import os
     import base64
     import time
 
     try:
+        from config import WEBHOOK_PUBLIC_URL
+        url_base = (WEBHOOK_PUBLIC_URL or "https://pastelaobhoters.chatboot.cloud").rstrip('/')
+
+        api_url = f"{WAHA_API_URL}/sendImage"
+        headers = {"Content-Type": "application/json", "X-Api-Key": WAHA_API_KEY}
+
+        # 1) Tentar via URL pública (WAHA baixa a imagem)
+        img_url = f"{url_base}/img/cardapio.jpeg"
+        payload_url = {
+            "chatId": chat_id,
+            "session": WAHA_SESSION,
+            "file": {"mimetype": "image/jpeg", "url": img_url, "filename": "cardapio.jpeg"},
+            "caption": "📋 *Cardápio Pastelão Brothers*"
+        }
+        resp = requests.post(api_url, json=payload_url, headers=headers, timeout=30)
+        if resp.status_code not in (200, 201):
+            print(f"[waha] sendImage URL falhou {resp.status_code}: {resp.text[:400]}", file=sys.stderr)
+        if resp.status_code in (200, 201):
+            time.sleep(0.8)
+            msg_link = f"Se preferir, pode acessar nosso cardápio online e fazer o pedido por lá:\n\n🌐 {url_base}"
+            enviar_mensagem_texto(chat_id, msg_link)
+            print(f"[waha] Cardápio em foto enviado (URL) para {chat_id}", file=sys.stderr)
+            return {'success': True, 'mensagem': 'Cardápio enviado'}
+
+        # 2) Fallback: base64 do arquivo local (formato file.data)
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         for fname in ('cardapio.jpeg', 'cardapio.jpg', 'cardapio.png'):
             img_path = os.path.normpath(os.path.join(base_dir, '..', 'frontend', 'img', fname))
             if os.path.isfile(img_path):
                 with open(img_path, 'rb') as f:
                     img_b64 = base64.b64encode(f.read()).decode('utf-8')
+                payload_b64 = {
+                    "chatId": chat_id,
+                    "session": WAHA_SESSION,
+                    "file": {"mimetype": "image/jpeg", "data": img_b64, "filename": "cardapio.jpeg"},
+                    "caption": "📋 *Cardápio Pastelão Brothers*"
+                }
+                resp = requests.post(api_url, json=payload_b64, headers=headers, timeout=30)
+                if resp.status_code in (200, 201):
+                    time.sleep(0.8)
+                    msg_link = f"Se preferir, pode acessar nosso cardápio online e fazer o pedido por lá:\n\n🌐 {url_base}"
+                    enviar_mensagem_texto(chat_id, msg_link)
+                    print(f"[waha] Cardápio em foto enviado (base64) para {chat_id}", file=sys.stderr)
+                    return {'success': True, 'mensagem': 'Cardápio enviado'}
+                print(f"[waha] sendImage base64: {resp.status_code} {resp.text[:300]}", file=sys.stderr)
+                return {'erro': f'Falha ao enviar imagem: {resp.status_code}'}
 
-                res = enviar_imagem_base64(chat_id, img_b64, legenda="📋 *Cardápio Pastelão Brothers*")
-                if not res.get('success'):
-                    return {'erro': res.get('error', 'Falha ao enviar imagem')}
-
-                time.sleep(0.8)
-                from config import WEBHOOK_PUBLIC_URL
-                url_base = (WEBHOOK_PUBLIC_URL or "https://pastelaobhoters.chatboot.cloud").rstrip('/')
-                msg_link = f"Se preferir, pode acessar nosso cardápio online e fazer o pedido por lá:\n\n🌐 {url_base}"
-                enviar_mensagem_texto(chat_id, msg_link)
-                print(f"[waha] Cardápio em foto enviado para {chat_id}", file=sys.stderr)
-                return {'success': True, 'mensagem': 'Cardápio enviado'}
-
-        print(f"[waha] Imagem cardapio não encontrada", file=sys.stderr)
         return {'erro': 'Imagem do cardápio não encontrada'}
     except Exception as e:
         print(f"[waha] Erro ao enviar cardápio: {e}", file=sys.stderr)
