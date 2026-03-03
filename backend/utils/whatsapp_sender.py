@@ -212,10 +212,11 @@ def enviar_link_cartao(chat_id, link_pagamento, valor_total, pedido_id):
         return {'success': False, 'error': str(e)}
 
 
-def enviar_cardapio_lista(chat_id, db_config):
+def enviar_cardapio_lista(chat_id, db_config, incluir_link=True):
     """
     Envia o cardápio como lista organizada por categoria (Salgados, Doces, Bebidas).
     Cada categoria em mensagem separada para melhor leitura.
+    incluir_link=False: não envia o link do cardápio online (quando cliente já escolheu pedir pelo WhatsApp).
     """
     import time
     try:
@@ -270,7 +271,10 @@ def enviar_cardapio_lista(chat_id, db_config):
             enviar_mensagem_texto(chat_id, "\n".join(linhas))
             time.sleep(0.5)
 
-        enviar_mensagem_texto(chat_id, f"Se preferir, acesse o cardápio online com fotos:\n🌐 {url_base}\n\nQualquer dúvida é só perguntar! 😊")
+        if incluir_link:
+            enviar_mensagem_texto(chat_id, f"Se preferir, acesse o cardápio online com fotos:\n🌐 {url_base}\n\nQualquer dúvida é só perguntar! 😊")
+        else:
+            enviar_mensagem_texto(chat_id, "O que você gostaria de pedir? 😊")
         print(f"[waha] Cardápio em lista enviado para {chat_id}", file=sys.stderr)
         return True
     except Exception as e:

@@ -77,7 +77,15 @@ TOOLS_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "enviar_cardapio_foto",
-            "description": "Envia a foto do cardápio e o link para pedir online. Use quando o cliente pedir cardápio, menu ou quiser ver os produtos (ex: 'manda o cardápio', 'qual o cardápio', 'ver o menu').",
+            "description": "Envia a foto do cardápio e o link para pedir online. Use quando o cliente pedir cardápio, menu ou quiser ver os produtos (ex: 'manda o cardápio', 'qual o cardápio'). NÃO use quando o cliente JÁ disse que quer pedir pelo WhatsApp.",
+            "parameters": {"type": "object", "properties": {}}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "enviar_lista_produtos_whatsapp",
+            "description": "Envia a LISTA de produtos (cardápio em texto) direto no chat. Use quando o cliente disser que quer fazer pedido pelo WhatsApp (ex: 'quero fazer aqui mesmo', 'quero pedir pelo zap', 'aqui pelo whatsapp'). NÃO envia link - só a lista. Depois pergunte o que deseja pedir.",
             "parameters": {"type": "object", "properties": {}}
         }
     },
@@ -85,7 +93,7 @@ TOOLS_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "listar_produtos",
-            "description": "Lista produtos por categoria (Salgado, Doce, Bebida). Use APENAS quando o cliente perguntar sobre um item específico ou categoria, NÃO use para pedido genérico de cardápio - nesse caso use enviar_cardapio_foto.",
+            "description": "Lista produtos por categoria (Salgado, Doce, Bebida). Retorna dados para a IA - use quando precisar consultar produtos. Para ENVIAR a lista ao cliente, use enviar_lista_produtos_whatsapp ou enviar_cardapio_foto.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -825,6 +833,11 @@ def executar_tool(nome_funcao, argumentos, db_config, chat_id=None):
         elif nome_funcao == "enviar_cardapio_foto":
             from utils.whatsapp_sender import enviar_cardapio_foto
             resultado = enviar_cardapio_foto(chat_id)
+
+        elif nome_funcao == "enviar_lista_produtos_whatsapp":
+            from utils.whatsapp_sender import enviar_cardapio_lista
+            ok = enviar_cardapio_lista(chat_id, db_config, incluir_link=False)
+            resultado = {"success": ok, "mensagem": "Lista de produtos enviada" if ok else "Erro ao enviar lista"}
 
         elif nome_funcao == "listar_produtos":
             resultado = listar_produtos(db_config, argumentos.get("categoria"))
