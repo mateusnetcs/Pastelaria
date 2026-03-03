@@ -224,13 +224,23 @@ def enviar_cardapio_lista(chat_id, db_config):
 
         res = listar_produtos(db_config)
         if res.get('erro'):
+            print(f"[waha] listar_produtos erro: {res.get('erro')}", file=sys.stderr)
             return False
         produtos = res.get('produtos', [])
+        if not produtos:
+            print(f"[waha] Nenhum produto no banco", file=sys.stderr)
+            return False
 
-        categorias = {'Salgado': '🥟 *SALGADOS*', 'Doce': '🍬 *DOCES*', 'Bebida': '🥤 *BEBIDAS*'}
+        # Agrupar por categoria (aceita Salgado/Salgados, Doce/Doces, Pastéis Salgados, etc)
+        def titulo_categoria(cat):
+            c = (cat or '').lower()
+            if 'salgad' in c: return '🥟 *SALGADOS*'
+            if 'doce' in c: return '🍬 *DOCES*'
+            if 'bebida' in c: return '🥤 *BEBIDAS*'
+            return f"*{(cat or 'Outros').upper()}*"
         por_cat = {}
         for p in produtos:
-            cat = p.get('categoria', 'Outros')
+            cat = (p.get('categoria') or 'Outros').strip() or 'Outros'
             if cat not in por_cat:
                 por_cat[cat] = []
             por_cat[cat].append(p)
@@ -241,11 +251,20 @@ def enviar_cardapio_lista(chat_id, db_config):
         enviar_mensagem_texto(chat_id, "📋 *Cardápio Pastelão Brothers*\n\nAqui estão nossos produtos:")
         time.sleep(0.6)
 
-        for cat_key, titulo in categorias.items():
-            if cat_key not in por_cat or not por_cat[cat_key]:
-                continue
+        # Ordenar: Salgados, Doces, Bebidas, depois o resto
+        def ordem_cat(c):
+            k = (c or '').lower()
+            if 'salgad' in k: return 0
+            if 'doce' in k: return 1
+            if 'bebida' in k: return 2
+            return 3
+        cats_ordenadas = sorted(por_cat.keys(), key=lambda x: (ordem_cat(x), x))
+
+        for cat_key in cats_ordenadas:
+            itens = por_cat[cat_key]
+            titulo = titulo_categoria(cat_key)
             linhas = [titulo, ""]
-            for p in por_cat[cat_key]:
+            for p in itens:
                 preco = f"R$ {float(p['preco']):.2f}".replace('.', ',')
                 linhas.append(f"• *{p['nome']}* – {preco}")
             enviar_mensagem_texto(chat_id, "\n".join(linhas))
