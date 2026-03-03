@@ -103,13 +103,17 @@ TOOLS_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "criar_pedido",
-            "description": "Cria um pedido com os itens escolhidos pelo cliente. Só use depois que o cliente confirmar os itens E informar se é entrega ou retirada (e o endereço, se entrega).",
+            "description": "Cria um pedido com os itens escolhidos. Use cliente_id quando o cliente está cadastrado. Use nome_cliente (e omita cliente_id) quando o cliente recusou o cadastro e informou só o nome para a comanda.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "cliente_id": {
                         "type": "integer",
-                        "description": "ID do cliente no sistema"
+                        "description": "ID do cliente no sistema (obrigatório se cadastrado). Omitir se pedido de visitante."
+                    },
+                    "nome_cliente": {
+                        "type": "string",
+                        "description": "Nome para a comanda - use quando cliente recusou cadastro e informou apenas o nome"
                     },
                     "itens": {
                         "type": "array",
@@ -145,7 +149,7 @@ TOOLS_DEFINITIONS = [
                         }
                     }
                 },
-                "required": ["cliente_id", "itens", "tipo_entrega"]
+                "required": ["itens", "tipo_entrega"]
             }
         }
     },
@@ -388,40 +392,58 @@ def listar_produtos(db_config, categoria=None):
         return {"erro": str(e)}
 
 
-def criar_pedido(cliente_id, itens, db_config, whatsapp_id=None,
-                 tipo_entrega="retirada", endereco=None):
-    """Cria pedido no banco com os itens informados (por nome do produto)."""
-    if cliente_id and int(cliente_id) > 999999:
-        return {
-            "erro": "cliente_id inválido. Parece ser um número de telefone/chat, não um ID do banco. "
-                    "Use o cliente_id retornado por cadastrar_cliente ou verificar_cliente."
-        }
-
+def criar_pedido(itens, db_config, whatsapp_id=None, tipo_entrega="retirada", endereco=None,
+                 cliente_id=None, nome_cliente=None):
+    """Cria pedido no banco. Use cliente_id para cadastrado ou nome_cliente para visitante."""
     conn = get_db_connection(db_config)
     if not conn:
         return {"erro": "Não foi possível conectar ao banco de dados"}
 
+    # Pedido de visitante: cliente recusou cadastro, informou só o nome
+    is_visitante = (nome_cliente and (cliente_id is None or cliente_id == ""))
+    if is_visitante:
+        cliente_id_final = None
+        cliente_nome_final = str(nome_cliente).strip() or "Cliente"
+    else:
+        # Pedido de cliente cadastrado
+        if not cliente_id:
+            cursor = conn.cursor(dictionary=True)
+            cursor.close()
+            conn.close()
+            return {"erro": "Informe cliente_id ou nome_cliente. Para cadastrado use cliente_id; para visitante use nome_cliente."}
+        if int(cliente_id) > 999999:
+            conn.close()
+            return {
+                "erro": "cliente_id inválido. Parece ser um número de telefone/chat, não um ID do banco. "
+                        "Use o cliente_id retornado por cadastrar_cliente ou verificar_cliente."
+            }
+        cliente_id_final = int(cliente_id)
+        cliente_nome_final = None  # será preenchido abaixo
+
     try:
         cursor = conn.cursor(dictionary=True)
 
-        cursor.execute("SELECT id, nome FROM usuarios WHERE id = %s", (cliente_id,))
-        cliente = cursor.fetchone()
-        if not cliente:
-            if whatsapp_id:
-                telefone_num = whatsapp_id.split('@')[0] if '@' in whatsapp_id else whatsapp_id
-                cursor.execute(
-                    "SELECT id, nome FROM usuarios WHERE telefone = %s OR telefone LIKE %s LIMIT 1",
-                    (telefone_num, f'%{telefone_num[-8:]}%')
-                )
-                cliente = cursor.fetchone()
-                if cliente:
-                    cliente_id = cliente['id']
-                    print(f"[tools] criar_pedido: cliente_id corrigido para {cliente_id} ({cliente['nome']}) via chat_id", file=sys.stderr)
-
-        if not cliente:
-            cursor.close()
-            conn.close()
-            return {"erro": "Cliente não encontrado. Cadastre o cliente primeiro com cadastrar_cliente."}
+        if not is_visitante:
+            cursor.execute("SELECT id, nome FROM usuarios WHERE id = %s", (cliente_id_final,))
+            cliente = cursor.fetchone()
+            if not cliente:
+                if whatsapp_id:
+                    telefone_num = whatsapp_id.split('@')[0] if '@' in whatsapp_id else whatsapp_id
+                    cursor.execute(
+                        "SELECT id, nome FROM usuarios WHERE telefone = %s OR telefone LIKE %s LIMIT 1",
+                        (telefone_num, f'%{telefone_num[-8:]}%')
+                    )
+                    cliente = cursor.fetchone()
+                    if cliente:
+                        cliente_id_final = cliente['id']
+                        cliente_nome_final = cliente['nome']
+                        print(f"[tools] criar_pedido: cliente_id corrigido para {cliente_id_final} ({cliente['nome']}) via chat_id", file=sys.stderr)
+            else:
+                cliente_nome_final = cliente['nome']
+            if not cliente and not is_visitante:
+                cursor.close()
+                conn.close()
+                return {"erro": "Cliente não encontrado. Cadastre o cliente primeiro com cadastrar_cliente."}
 
         total = 0
         itens_resolvidos = []
@@ -476,10 +498,14 @@ def criar_pedido(cliente_id, itens, db_config, whatsapp_id=None,
             observacoes_dict['numero'] = endereco.get('numero', '')
             observacoes_dict['complemento'] = endereco.get('complemento', '')
 
+        telefone_num = None
+        if whatsapp_id:
+            telefone_num = whatsapp_id.split('@')[0] if '@' in whatsapp_id else whatsapp_id
+
         cursor.execute("""
-            INSERT INTO pedidos (cliente_id, total, status, observacoes, created_at)
-            VALUES (%s, %s, 'pendente', %s, NOW())
-        """, (cliente_id, total, json.dumps(observacoes_dict)))
+            INSERT INTO pedidos (cliente_id, cliente_nome, cliente_telefone, cliente_whatsapp, total, status, observacoes, created_at)
+            VALUES (%s, %s, %s, %s, %s, 'pendente', %s, NOW())
+        """, (cliente_id_final, cliente_nome_final, telefone_num, telefone_num, total, json.dumps(observacoes_dict)))
 
         pedido_id = cursor.lastrowid
 
@@ -806,12 +832,13 @@ def executar_tool(nome_funcao, argumentos, db_config, chat_id=None):
         elif nome_funcao == "criar_pedido":
             itens_raw = argumentos.get("itens", [])
             resultado = criar_pedido(
-                argumentos.get("cliente_id"),
                 itens_raw,
                 db_config,
-                chat_id,
-                argumentos.get("tipo_entrega", "retirada"),
-                argumentos.get("endereco")
+                whatsapp_id=chat_id,
+                tipo_entrega=argumentos.get("tipo_entrega", "retirada"),
+                endereco=argumentos.get("endereco"),
+                cliente_id=argumentos.get("cliente_id"),
+                nome_cliente=argumentos.get("nome_cliente")
             )
 
         elif nome_funcao == "gerar_pagamento_pix":

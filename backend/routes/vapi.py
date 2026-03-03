@@ -139,10 +139,12 @@ def _executar_tool_vapi(tool_name, arguments, call_info):
         chat_id_vapi = f"vapi_{tel_busca}"
 
         resultado = criar_pedido(
-            cliente_id, itens_lista, DB_CONFIG,
+            itens_lista, DB_CONFIG,
             whatsapp_id=chat_id_vapi,
             tipo_entrega=tipo_entrega,
-            endereco=endereco_obj
+            endereco=endereco_obj,
+            cliente_id=cliente_id,
+            nome_cliente=None
         )
 
         if resultado.get("sucesso"):
