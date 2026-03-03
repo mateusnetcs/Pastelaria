@@ -1246,7 +1246,7 @@ def admin_excluir_cliente(cliente_id):
             return jsonify({'success': False, 'error': 'Erro DB'}), 500
         cursor = conn.cursor(dictionary=True)
 
-        cursor.execute("SELECT id, is_admin FROM usuarios WHERE id = %s", (cliente_id,))
+        cursor.execute("SELECT id, is_admin, telefone FROM usuarios WHERE id = %s", (cliente_id,))
         user = cursor.fetchone()
         if not user:
             cursor.close(); conn.close()
@@ -1255,9 +1255,15 @@ def admin_excluir_cliente(cliente_id):
             cursor.close(); conn.close()
             return jsonify({'success': False, 'error': 'Não é possível excluir um admin'}), 403
 
-        cursor.execute("DELETE FROM pedido_itens WHERE pedido_id IN (SELECT id FROM pedidos WHERE cliente_id = %s)", (cliente_id,))
-        cursor.execute("DELETE FROM pedidos WHERE cliente_id = %s", (cliente_id,))
-        cursor.execute("DELETE FROM conversas WHERE usuario_id = %s", (cliente_id,))
+        telefone = (user.get('telefone') or '').replace(' ', '').replace('-', '').replace('+', '').replace('(', '').replace(')', '')
+        telefone_digits = ''.join(c for c in telefone if c.isdigit())
+        if telefone_digits:
+            cursor.execute(
+                "DELETE FROM conversas WHERE SUBSTRING_INDEX(chat_id, '@', 1) = %s",
+                (telefone_digits,)
+            )
+
+        cursor.execute("UPDATE pedidos SET cliente_id = NULL WHERE cliente_id = %s", (cliente_id,))
         cursor.execute("DELETE FROM usuarios WHERE id = %s", (cliente_id,))
         conn.commit()
         cursor.close(); conn.close()
