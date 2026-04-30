@@ -39,55 +39,6 @@ function mostrarPedidos() {
     atualizarMenuAtivo('pedidos');
 }
 
-// ========= INTEGRAÇÃO IA / WAHA QR =========
-
-async function abrirModalIntegracaoIA() {
-    if (typeof garantirApiBackendDev === 'function') garantirApiBackendDev();
-    const el = document.getElementById('modal-integracao-ia');
-    if (!el) return;
-    el.classList.remove('hidden');
-    await carregarQrWaha();
-}
-
-function fecharModalIntegracaoIA() {
-    const el = document.getElementById('modal-integracao-ia');
-    if (el) el.classList.add('hidden');
-}
-
-async function carregarQrWaha() {
-    const img = document.getElementById('waha-qr-img');
-    const err = document.getElementById('waha-qr-erro');
-    const load = document.getElementById('waha-qr-loading');
-    if (!img || !err || !load) return;
-    err.classList.add('hidden');
-    err.textContent = '';
-    load.classList.remove('hidden');
-    img.classList.add('hidden');
-    img.removeAttribute('src');
-    if (typeof garantirApiBackendDev === 'function') garantirApiBackendDev();
-    try {
-        const resp = await fetch(`${API_URL}/admin/waha/qr`, { headers: adminHeaders(), credentials: 'include' });
-        const data = await resp.json();
-        load.classList.add('hidden');
-        if (data.success && data.data) {
-            img.src = `data:${data.mimetype || 'image/png'};base64,${data.data}`;
-            img.classList.remove('hidden');
-        } else {
-            let msg = data.error || 'QR indisponível';
-            if (data.detail) {
-                const d = String(data.detail);
-                msg += ' ' + (d.length > 240 ? d.slice(0, 240) + '…' : d);
-            }
-            err.textContent = msg;
-            err.classList.remove('hidden');
-        }
-    } catch (e) {
-        load.classList.add('hidden');
-        err.textContent = 'Erro de rede ao carregar o QR';
-        err.classList.remove('hidden');
-    }
-}
-
 // ========= DETALHE DO PEDIDO =========
 
 async function abrirDetalhePedido(pedidoId) {

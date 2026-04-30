@@ -9,7 +9,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="css/styles.css">
-    <script src="js/api.js?v=3"></script>
+    <script src="js/api.js?v=5"></script>
     <script src="js/toast.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
@@ -186,10 +186,6 @@
             <a href="#" onclick="abrirSlidesApresentacao(); return false;" class="sidebar-item flex items-center px-6 py-3 text-gray-400 hover:text-white transition-colors">
                 <i class="fas fa-images w-6"></i>
                 <span class="ml-3 font-medium">Abrir Slides</span>
-            </a>
-            <a href="#" onclick="abrirModalIntegracaoIA(); return false;" class="sidebar-item flex items-center px-6 py-3 text-gray-400 hover:text-white transition-colors">
-                <i class="fas fa-qrcode w-6"></i>
-                <span class="ml-3 font-medium">Integração IA</span>
             </a>
         </nav>
 
@@ -687,32 +683,6 @@
         </div>
     </div>
 
-    <!-- Modal Integração IA / QR WAHA -->
-    <div id="modal-integracao-ia" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md">
-            <div class="bg-[#1e293b] p-5 rounded-t-2xl flex justify-between items-center">
-                <div>
-                    <h2 class="text-lg font-bold text-white">Integração IA</h2>
-                    <p class="text-gray-400 text-sm mt-0.5">Escaneie com o WhatsApp para conectar (WAHA)</p>
-                </div>
-                <button type="button" onclick="fecharModalIntegracaoIA()" class="text-gray-400 hover:text-white transition-colors" aria-label="Fechar">
-                    <i class="fas fa-times text-xl"></i>
-                </button>
-            </div>
-            <div class="p-6 flex flex-col items-center">
-                <div id="waha-qr-loading" class="py-12 text-gray-500">
-                    <i class="fas fa-spinner fa-spin text-2xl"></i>
-                    <span class="ml-2">Carregando QR...</span>
-                </div>
-                <img id="waha-qr-img" class="hidden max-w-full rounded-lg border border-gray-200 shadow-sm" alt="QR Code WhatsApp" width="256" height="256" />
-                <p id="waha-qr-erro" class="hidden text-sm text-red-600 text-center mt-2 max-w-full break-words"></p>
-                <button type="button" onclick="carregarQrWaha()" class="mt-6 w-full bg-orange-500 hover:bg-orange-600 text-white py-2.5 rounded-lg font-semibold text-sm transition-colors">
-                    <i class="fas fa-sync-alt mr-2"></i>Atualizar QR
-                </button>
-            </div>
-        </div>
-    </div>
-
     <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
 
     <script>
@@ -845,6 +815,6 @@
     });
     </script>
 
-    <script src="js/admin.js"></script>
+    <script src="js/admin.js?v=7"></script>
 </body>
 </html>
