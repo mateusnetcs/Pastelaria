@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Integração IA + WhatsApp + Cardápio</title>
+<link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&family=Open+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+        margin: 0;
+        padding: 0;
+        font-family: 'Open Sans', sans-serif;
+        background: #f5f5f5;
+        overflow: hidden;
+    }
+    .slide-container {
+        position: relative;
+        width: 100vw;
+        height: 100vh;
+        overflow: hidden;
+        background: linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%);
+    }
+    .header {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 80px;
+        background: linear-gradient(135deg, #ff6f00 0%, #ff8f00 100%);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 50px;
+        box-shadow: 0 2px 20px rgba(0,0,0,0.1);
+    }
+    .header-title {
+        font-family: 'Montserrat', sans-serif;
+        font-size: 28px;
+        font-weight: 700;
+        color: white;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+    .header-subtitle {
+        font-size: 16px;
+        color: rgba(255,255,255,0.9);
+        margin-left: 20px;
+    }
+    .content {
+        position: absolute;
+        top: 110px;
+        left: 45px;
+        right: 45px;
+        bottom: 30px;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+    .intro-box {
+        background: white;
+        border-radius: 16px;
+        padding: 18px 24px;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.07);
+    }
+    .intro-title {
+        font-family: 'Montserrat', sans-serif;
+        font-size: 24px;
+        font-weight: 700;
+        color: #333;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 8px;
+    }
+    .intro-text {
+        font-size: 16px;
+        color: #555;
+        line-height: 1.5;
+    }
+    .flow {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 20px;
+        align-items: stretch;
+    }
+    .node {
+        background: white;
+        border-radius: 14px;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+        padding: 20px;
+        border-top: 5px solid #ff8f00;
+    }
+    .node-title {
+        font-family: 'Montserrat', sans-serif;
+        font-size: 20px;
+        font-weight: 700;
+        color: #333;
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .node-list {
+        list-style: none;
+        font-size: 14px;
+        color: #555;
+        line-height: 1.6;
+    }
+    .node-list li::before {
+        content: "• ";
+        color: #ff6f00;
+        font-weight: 700;
+    }
+    .integrations {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+    }
+    .integration-card {
+        background: white;
+        border-radius: 12px;
+        padding: 16px;
+        box-shadow: 0 3px 12px rgba(0,0,0,0.06);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 14px;
+        color: #444;
+        font-weight: 600;
+    }
+    .footer-note {
+        background: rgba(255,111,0,0.1);
+        border-radius: 12px;
+        padding: 14px 18px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 15px;
+        color: #333;
+    }
+</style>
+</head>
+<body>
+<div class="slide-container">
+    <div class="header">
+        <div class="header-title">
+            <i class="fas fa-store"></i>
+            Pastelão Brothers
+            <span class="header-subtitle">Integração IA + WhatsApp + Cardápio</span>
+        </div>
+        <div style="color:white;font-weight:700;font-size:14px;background:rgba(255,255,255,0.2);padding:8px 14px;border-radius:18px;">
+            Fluxo simples do pedido
+        </div>
+    </div>
+
+    <div class="content">
+        <div class="intro-box">
+            <div class="intro-title"><i class="fas fa-robot" style="color:#ff6f00;"></i>Como funciona na prática</div>
+            <div class="intro-text">A integração junta <strong>IA + WhatsApp + Cardápio</strong> para atender o cliente e registrar o pedido sem complicação.</div>
+        </div>
+
+        <div class="flow">
+            <div class="node">
+                <div class="node-title"><i class="fas fa-book-open" style="color:#ff6f00;"></i>Cardápio</div>
+                <ul class="node-list">
+                    <li>Cliente vê os produtos</li>
+                    <li>Escolhe sabores e quantidade</li>
+                    <li>Envia pedido pelo WhatsApp</li>
+                </ul>
+            </div>
+            <div class="node">
+                <div class="node-title"><i class="fab fa-whatsapp" style="color:#25d366;"></i>WhatsApp + IA</div>
+                <ul class="node-list">
+                    <li>A IA conversa com o cliente</li>
+                    <li>Pega os dados do pedido</li>
+                    <li>Confirma antes de finalizar</li>
+                </ul>
+            </div>
+            <div class="node">
+                <div class="node-title"><i class="fas fa-database" style="color:#ff6f00;"></i>Sistema</div>
+                <ul class="node-list">
+                    <li>Cadastra o pedido automaticamente</li>
+                    <li>Atualiza os dados do cliente</li>
+                    <li>Mostra tudo no painel admin</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="integrations">
+            <div class="integration-card"><i class="fas fa-book-open" style="color:#ff6f00;font-size:20px;"></i> Cardápio digital atualizado</div>
+            <div class="integration-card"><i class="fab fa-whatsapp" style="color:#25d366;font-size:20px;"></i> Atendimento no WhatsApp</div>
+            <div class="integration-card"><i class="fas fa-robot" style="color:#ff6f00;font-size:20px;"></i> IA registrando e atualizando dados</div>
+        </div>
+
+        <div class="footer-note">
+            <i class="fas fa-circle-info" style="color:#ff6f00;"></i>
+            <span>A IA pega os dados do pedido do cliente, cadastra no sistema e mantém as informações atualizadas para a equipe.</span>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('keydown', (event) => {
+        if (event.code !== 'Space') return;
+        event.preventDefault();
+        window.location.href = 'index5.html';
+    });
+</script>
+</body>
+</html>

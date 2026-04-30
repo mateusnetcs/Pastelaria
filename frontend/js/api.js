@@ -3,47 +3,100 @@
  * Gerencia a conexão com o backend
  */
 
-let API_URL = '/api';
+/** Hostname para montar URL (IPv6 precisa de colchetes). */
+function hostnameParaUrl(hostname) {
+    if (!hostname) return 'localhost';
+    if (hostname.includes(':') && hostname !== '[::1]' && !hostname.startsWith('[')) {
+        return `[${hostname}]`;
+    }
+    return hostname;
+}
+
+/** Ambiente local / rede interna: API fica em outra porta; nunca usar só "/api" no 8001. */
+function isHostLocalOuRedeInterna() {
+    if (typeof location === 'undefined') return false;
+    const h = location.hostname;
+    if (h === 'localhost' || h === '127.0.0.1' || h === '::1' || h === '[::1]') return true;
+    if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(h)) return true;
+    if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h)) return true;
+    if (/^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(h)) return true;
+    return false;
+}
+
+function defaultApiUrl() {
+    if (typeof location === 'undefined') return '/api';
+    if (!isHostLocalOuRedeInterna()) return '/api';
+    const h = hostnameParaUrl(location.hostname);
+    return `http://${h}:5000/api`;
+}
+
+let API_URL = defaultApiUrl();
+
+/**
+ * Garante URL absoluta do Flask em dev (evita POST no server.py da porta 8001 → 501).
+ */
+function garantirApiBackendDev() {
+    if (!isHostLocalOuRedeInterna()) return;
+    const relativoOuMesmaOrigemErrada =
+        typeof API_URL === 'string' &&
+        (API_URL.startsWith('/') ||
+            API_URL.startsWith(`${location.origin}/api`));
+    if (relativoOuMesmaOrigemErrada) {
+        const h = hostnameParaUrl(location.hostname);
+        API_URL = `http://${h}:5000/api`;
+        console.warn('[api] Corrigindo API_URL para:', API_URL);
+    }
+}
 
 async function detectarPortaBackend() {
-    const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+    garantirApiBackendDev();
 
-    if (!isLocal) {
-        API_URL = `${location.origin}/api`;
-        try {
-            const resp = await fetch(`${API_URL}/produtos`, { method: 'GET', cache: 'no-cache' });
-            if (resp.ok) {
-                console.log('Backend detectado via origem:', location.origin);
-                return true;
+    const hostUrl = hostnameParaUrl(location.hostname);
+
+    async function sondarPortasLocais() {
+        const portas = [5000, 5001];
+        for (const porta of portas) {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 2500);
+                const response = await fetch(`http://${hostUrl}:${porta}/api/produtos`, {
+                    method: 'GET',
+                    mode: 'cors',
+                    cache: 'no-cache',
+                    headers: { Accept: 'application/json' },
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+                if (response.status >= 200 && response.status < 600) {
+                    API_URL = `http://${hostUrl}:${porta}/api`;
+                    console.log(`Backend em http://${hostUrl}:${porta} (HTTP ${response.status})`);
+                    return true;
+                }
+            } catch (e) {
+                if (e.name !== 'AbortError') {
+                    console.log(`Porta ${porta}:`, e.message);
+                }
             }
-        } catch (e) {}
-        console.warn('Backend não respondeu na origem atual');
+        }
         return false;
     }
 
-    const portas = [5000, 5001];
-    for (const porta of portas) {
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 2000);
-            const response = await fetch(`http://localhost:${porta}/api/produtos`, {
-                method: 'GET', mode: 'cors', cache: 'no-cache',
-                headers: { 'Accept': 'application/json' },
-                signal: controller.signal
-            });
-            clearTimeout(timeoutId);
-            if (response.ok) {
-                API_URL = `http://localhost:${porta}/api`;
-                console.log(`Backend detectado na porta ${porta}`);
-                return true;
-            }
-        } catch (e) {
-            if (e.name !== 'AbortError') {
-                console.log(`Porta ${porta} não disponível:`, e.message);
-            }
-        }
+    if (isHostLocalOuRedeInterna()) {
+        if (await sondarPortasLocais()) return true;
+        API_URL = `http://${hostUrl}:5000/api`;
+        console.warn('Backend não respondeu em 5000/5001 — usando fallback:', API_URL);
+        garantirApiBackendDev();
+        return false;
     }
 
-    console.warn('Backend não encontrado nas portas 5000 ou 5001');
+    API_URL = `${location.origin}/api`;
+    try {
+        const resp = await fetch(`${API_URL}/produtos`, { method: 'GET', cache: 'no-cache' });
+        if (resp.ok) {
+            console.log('Backend via mesma origem:', location.origin);
+            return true;
+        }
+    } catch (e) {}
+    console.warn('Backend não encontrado na origem:', location.origin);
     return false;
 }

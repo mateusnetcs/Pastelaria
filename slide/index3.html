@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>O que é o Projeto - Pastelão Brothers</title>
+<link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&amp;family=Open+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Open Sans', sans-serif;
+            background: #f5f5f5;
+            overflow: hidden;
+        }
+        .slide-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background: linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%);
+        }
+        .header {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 80px;
+            background: linear-gradient(135deg, #ff6f00 0%, #ff8f00 100%);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 50px;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.1);
+        }
+        .header-title {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 28px;
+            font-weight: 700;
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .header-subtitle {
+            font-size: 16px;
+            color: rgba(255,255,255,0.9);
+            margin-left: 20px;
+        }
+        .content-area {
+            position: absolute;
+            top: 100px;
+            left: 50px;
+            right: 50px;
+            bottom: 30px;
+            display: flex;
+            gap: 40px;
+        }
+        .left-column {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+        }
+        .right-column {
+            width: 45%;
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+        }
+        .intro-card {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+        .intro-title {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 22px;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .intro-text {
+            font-size: 16px;
+            color: #666;
+            line-height: 1.7;
+        }
+        .three-pieces {
+            display: flex;
+            gap: 15px;
+            margin-top: 5px;
+        }
+        .piece-card {
+            flex: 1;
+            background: white;
+            border-radius: 12px;
+            padding: 24px 15px;
+            box-shadow: 0 2px 15px rgba(0,0,0,0.06);
+            border-left: 4px solid #ff6f00;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+        .piece-icon {
+            font-size: 36px;
+            color: #ff6f00;
+            margin-bottom: 12px;
+        }
+        .piece-title {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 16px;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 6px;
+        }
+        .piece-desc {
+            font-size: 13px;
+            color: #666;
+            line-height: 1.4;
+        }
+        .features-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .feature-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 15px rgba(0,0,0,0.06);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .feature-icon {
+            width: 44px;
+            height: 44px;
+            background: rgba(255,111,0,0.1);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: #ff6f00;
+            flex-shrink: 0;
+        }
+        .feature-content {
+            flex: 1;
+        }
+        .feature-title {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 15px;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 2px;
+        }
+        .feature-desc {
+            font-size: 13px;
+            color: #666;
+            line-height: 1.3;
+        }
+        .highlight-box {
+            background: rgba(255,111,0,0.1);
+            border-radius: 10px;
+            padding: 18px;
+            margin-top: 10px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .highlight-text {
+            font-size: 14px;
+            color: #333;
+            line-height: 1.4;
+        }
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            background: rgba(76,175,80,0.1);
+            border-radius: 20px;
+            font-size: 13px;
+            color: #4caf50;
+            font-weight: 600;
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: #4caf50;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+    </style>
+</head>
+<body>
+<div class="slide-container">
+<div class="header">
+<div class="header-title">
+<i class="fas fa-store"></i>
+            Pastelão Brothers
+            <span class="header-subtitle">Sistema Inteligente de Atendimento</span>
+</div>
+<div class="status-badge">
+<div class="status-dot"></div>
+            Sistema Ativo
+        </div>
+</div>
+<div class="content-area">
+<div class="left-column">
+<div class="intro-card">
+<div class="intro-title">
+<i class="fas fa-lightbulb" style="color: #ff6f00;"></i>
+                    O que é o Projeto?
+                </div>
+<div class="intro-text">
+                    O <strong>Pastelão Brothers</strong> é um sistema inteligente que une <span style="color: #ff6f00; font-weight: 600;">cardápio online</span> ao atendimento automático via WhatsApp através da atendente virtual <strong>Lia</strong>. 
+                    <br/><br/>
+                    Para o <strong>cliente</strong>: experiência rápida e prática para escolher, pagar e acompanhar o pedido.
+                    <br/>
+                    Para a <strong>equipe</strong>: menos filas, menos erros e pedidos organizados.
+                </div>
+</div>
+<div>
+<div style="font-family: 'Montserrat', sans-serif; font-size: 18px; font-weight: 700; color: #333; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+<i class="fas fa-cubes" style="color: #ff6f00;"></i>
+                    As 3 Peças que Fazem Tudo Funcionar
+                </div>
+<div class="three-pieces">
+<div class="piece-card">
+<div class="piece-icon">
+<i class="fas fa-globe"></i>
+</div>
+<div class="piece-title">Site</div>
+<div class="piece-desc">Cardápio e pedidos</div>
+</div>
+<div class="piece-card">
+<div class="piece-icon">
+<i class="fas fa-brain"></i>
+</div>
+<div class="piece-title">Cérebro</div>
+<div class="piece-desc">API e automação</div>
+</div>
+<div class="piece-card">
+<div class="piece-icon">
+<i class="fas fa-database"></i>
+</div>
+<div class="piece-title">Caderno</div>
+<div class="piece-desc">Banco de dados</div>
+</div>
+</div>
+</div>
+<div class="highlight-box">
+<i class="fas fa-clock" style="color: #ff6f00; font-size: 18px;"></i>
+<div class="highlight-text">
+<strong>Disponibilidade:</strong> 24h em VPS na nuvem • <strong>Segurança:</strong> Pagamentos externos e dados protegidos
+                </div>
+</div>
+</div>
+<div class="right-column">
+<div>
+<div style="font-family: 'Montserrat', sans-serif; font-size: 18px; font-weight: 700; color: #333; margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
+<i class="fas fa-star" style="color: #ff6f00;"></i>
+                    Funcionalidades Principais
+                </div>
+<div class="features-grid">
+<div class="feature-card">
+<div class="feature-icon">
+<i class="fas fa-qrcode"></i>
+</div>
+<div class="feature-content">
+<div class="feature-title">QR Code nas Mesas</div>
+<div class="feature-desc">Acesso rápido ao cardápio</div>
+</div>
+</div>
+<div class="feature-card">
+<div class="feature-icon">
+<i class="fas fa-robot"></i>
+</div>
+<div class="feature-content">
+<div class="feature-title">Atendente Virtual Lia</div>
+<div class="feature-desc">IA para pedidos automáticos</div>
+</div>
+</div>
+<div class="feature-card">
+<div class="feature-icon">
+<i class="fas fa-credit-card"></i>
+</div>
+<div class="feature-content">
+<div class="feature-title">Pagamento Online</div>
+<div class="feature-desc">Mercado Pago integrado</div>
+</div>
+</div>
+<div class="feature-card">
+<div class="feature-icon">
+<i class="fas fa-map-marker-alt"></i>
+</div>
+<div class="feature-content">
+<div class="feature-title">Rastreamento</div>
+<div class="feature-desc">Acompanhe em tempo real</div>
+</div>
+</div>
+</div>
+</div>
+<div class="intro-card" style="margin-top: auto; padding: 25px;">
+<div class="intro-title" style="font-size: 18px; margin-bottom: 12px;">
+<i class="fas fa-info-circle" style="color: #ff6f00;"></i>
+                    Canais de Entrada
+                </div>
+<div style="display: flex; gap: 20px; margin-top: 5px;">
+<div style="flex: 1; text-align: center; padding: 15px 10px; background: rgba(255,111,0,0.05); border-radius: 12px;">
+<i class="fas fa-qrcode" style="color: #ff6f00; font-size: 24px; margin-bottom: 8px;"></i>
+<div style="font-size: 13px; color: #333; font-weight: 600;">QR Code</div>
+</div>
+<div style="flex: 1; text-align: center; padding: 15px 10px; background: rgba(37,211,102,0.05); border-radius: 12px;">
+<i class="fab fa-whatsapp" style="color: #25d366; font-size: 24px; margin-bottom: 8px;"></i>
+<div style="font-size: 13px; color: #333; font-weight: 600;">WhatsApp</div>
+</div>
+<div style="flex: 1; text-align: center; padding: 15px 10px; background: rgba(225,48,108,0.05); border-radius: 12px;">
+<i class="fab fa-instagram" style="color: #e1306c; font-size: 24px; margin-bottom: 8px;"></i>
+<div style="font-size: 13px; color: #333; font-weight: 600;">Instagram</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<script>
+    document.addEventListener('keydown', (event) => {
+        if (event.code !== 'Space') return;
+        event.preventDefault();
+        window.location.href = 'index2.html';
+    });
+</script>
+</body>
+</html>

@@ -43,7 +43,7 @@ function mostrarPedidos() {
 
 async function abrirDetalhePedido(pedidoId) {
     try {
-        const resp = await fetch(`/api/admin/pedido/${pedidoId}/detalhes`, { headers: adminHeaders() });
+        const resp = await fetch(`${API_URL}/admin/pedido/${pedidoId}/detalhes`, { headers: adminHeaders() });
         const data = await resp.json();
         if (!data.success) { showToast('Erro ao carregar pedido', 'error'); return; }
 
@@ -160,7 +160,7 @@ async function imprimirCupom() {
 
 async function imprimirCupomSilencioso(pedidoId) {
     try {
-        const resp = await fetch(`/api/admin/pedido/${pedidoId}/imprimir`, {
+        const resp = await fetch(`${API_URL}/admin/pedido/${pedidoId}/imprimir`, {
             method: 'POST',
             headers: { ...adminHeaders(), 'Content-Type': 'application/json' },
             body: JSON.stringify({})

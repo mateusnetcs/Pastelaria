@@ -9,7 +9,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="css/styles.css">
-    <script src="js/api.js"></script>
+    <script src="js/api.js?v=3"></script>
     <script src="js/toast.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
@@ -182,6 +182,10 @@
             <a href="#" onclick="mostrarRelatorios(); return false;" class="sidebar-item flex items-center px-6 py-3 text-gray-400 hover:text-white transition-colors">
                 <i class="fas fa-file-alt w-6"></i>
                 <span class="ml-3 font-medium">Relatórios</span>
+            </a>
+            <a href="#" onclick="abrirSlidesApresentacao(); return false;" class="sidebar-item flex items-center px-6 py-3 text-gray-400 hover:text-white transition-colors">
+                <i class="fas fa-images w-6"></i>
+                <span class="ml-3 font-medium">Abrir Slides</span>
             </a>
         </nav>
 
@@ -694,6 +698,13 @@
         }
     }
 
+    function abrirSlidesApresentacao() {
+        const host = location.hostname.includes(':') && !location.hostname.startsWith('[')
+            ? `[${location.hostname}]`
+            : location.hostname;
+        window.open(`${location.protocol}//${host}:5000/slide/index1.html`, '_blank', 'noopener');
+    }
+
     async function loginAdmin(e) {
         e.preventDefault();
         const email = document.getElementById('login-email').value.trim();
@@ -711,6 +722,7 @@
 
         try {
             await detectarPortaBackend();
+            if (typeof garantirApiBackendDev === 'function') garantirApiBackendDev();
 
             const response = await fetch(`${API_URL}/admin/login`, {
                 method: 'POST',
@@ -774,6 +786,7 @@
 
     document.addEventListener('DOMContentLoaded', async () => {
         await detectarPortaBackend();
+        if (typeof garantirApiBackendDev === 'function') garantirApiBackendDev();
 
         const token = localStorage.getItem('admin_token');
         if (token) {

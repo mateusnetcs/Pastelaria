@@ -28,5 +28,10 @@ MERCADOPAGO_ACCESS_TOKEN = os.getenv('MERCADOPAGO_ACCESS_TOKEN', '')
 WEBHOOK_PUBLIC_URL = os.getenv('WEBHOOK_PUBLIC_URL', '')
 FLASK_SECRET_KEY = os.getenv('FLASK_SECRET_KEY', '') or secrets.token_hex(32)
 
-ALLOWED_ORIGINS = os.getenv('ALLOWED_ORIGINS', 'http://localhost:8001,http://localhost:5000').split(',')
+_allowed_raw = os.getenv('ALLOWED_ORIGINS', 'http://localhost:8001,http://localhost:5000')
+ALLOWED_ORIGINS = [o.strip() for o in _allowed_raw.split(',') if o.strip()]
+# Dev: navegador em 127.0.0.1 é origem diferente de localhost — incluir para CORS em chamadas à API
+for _o in ('http://127.0.0.1:8001', 'http://127.0.0.1:5000'):
+    if _o not in ALLOWED_ORIGINS:
+        ALLOWED_ORIGINS.append(_o)
 FLASK_DEBUG = os.getenv('FLASK_DEBUG', 'false').lower() == 'true'

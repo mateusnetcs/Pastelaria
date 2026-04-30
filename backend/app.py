@@ -24,6 +24,7 @@ ADMIN_JWT_ALGORITHM = 'HS256'
 ADMIN_JWT_EXPIRES_HOURS = 24
 
 FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'frontend')
+SLIDE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'slide')
 UPLOAD_DIR = os.path.join(FRONTEND_DIR, 'uploads')
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
@@ -42,6 +43,14 @@ app.register_blueprint(vapi_bp)
 @app.route('/')
 def serve_index():
     return send_from_directory(FRONTEND_DIR, 'index.html')
+
+
+@app.route('/slide/<path:filename>')
+def serve_slides(filename):
+    slidepath = os.path.join(SLIDE_DIR, filename)
+    if os.path.isfile(slidepath):
+        return send_from_directory(SLIDE_DIR, filename)
+    return jsonify({'success': False, 'error': 'Slide não encontrado'}), 404
 
 
 @app.route('/<path:filename>')
