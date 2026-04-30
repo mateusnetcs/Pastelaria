@@ -26,6 +26,7 @@ _buffer_lock = threading.Lock()
 _message_ids = {}
 _processed_ids = set()
 _recent_by_content = {}  # hash(chat_id|texto) -> timestamp (dedup por conteúdo)
+_chat_id_envio = {}  # chat_id_normalizado -> último chat_id bruto observado
 
 
 def _normalizar_chat_id(chat_id):
@@ -159,15 +160,15 @@ def webhook_waha():
         chat_id = _normalizar_chat_id(chat_id_raw)
 
         # Filtrar ANTES de qualquer processamento: só atender chat privado
-        if not chat_id:
+        if not chat_id_raw:
             return jsonify({"status": "ignored", "reason": "no chat_id"}), 200
 
         # Ignorar grupos, status, newsletters
-        if '@g.us' in chat_id:
+        if '@g.us' in chat_id_raw:
             return jsonify({"status": "ignored", "reason": "group"}), 200
-        if 'status@' in chat_id or '@broadcast' in chat_id:
+        if 'status@' in chat_id_raw or '@broadcast' in chat_id_raw:
             return jsonify({"status": "ignored", "reason": "status"}), 200
-        if '@newsletter' in chat_id:
+        if '@newsletter' in chat_id_raw:
             return jsonify({"status": "ignored", "reason": "newsletter"}), 200
 
         print(f"[webhook] Chat recebido: {chat_id} (event={event})", file=sys.stderr)
@@ -233,6 +234,7 @@ def webhook_waha():
             if chat_id not in _message_buffers:
                 _message_buffers[chat_id] = []
                 _message_ids[chat_id] = []
+            _chat_id_envio[chat_id] = chat_id_raw
 
             _message_buffers[chat_id].append(mensagem_texto)
             if message_id:
@@ -268,6 +270,7 @@ def _processar_buffer(chat_id):
         mensagens = _message_buffers.pop(chat_id, [])
         ids = _message_ids.pop(chat_id, [])
         _buffer_timers.pop(chat_id, None)
+        chat_id_envio = _chat_id_envio.pop(chat_id, chat_id)
         for mid in ids:
             _processed_ids.add(mid)
         if len(_processed_ids) > 500:
@@ -287,19 +290,19 @@ def _processar_buffer(chat_id):
         pediu_cardapio = any(p in txt_lower for p in ('cardapio', 'cardápio', 'menu'))
         if pediu_cardapio:
             from utils.whatsapp_sender import enviar_cardapio_foto, enviar_mensagem_texto
-            cardapio_res = enviar_cardapio_foto(chat_id)
+            cardapio_res = enviar_cardapio_foto(chat_id_envio)
             if cardapio_res.get('success'):
-                enviar_mensagem_texto(chat_id, "Pronto! Enviei o cardápio para você. 😊 Qualquer dúvida é só perguntar!")
-                print(f"[debounce] Cardápio enviado diretamente para {chat_id}", file=sys.stderr)
+                enviar_mensagem_texto(chat_id_envio, "Pronto! Enviei o cardápio para você. 😊 Qualquer dúvida é só perguntar!")
+                print(f"[debounce] Cardápio enviado diretamente para {chat_id_envio}", file=sys.stderr)
                 return
             else:
                 from utils.whatsapp_sender import enviar_cardapio_lista
-                if enviar_cardapio_lista(chat_id, DB_CONFIG):
+                if enviar_cardapio_lista(chat_id_envio, DB_CONFIG):
                     return
                 # Fallback final se listar falhar
                 from config import WEBHOOK_PUBLIC_URL
                 url = (WEBHOOK_PUBLIC_URL or "https://pastelaobhoters.chatboot.cloud").rstrip('/')
-                enviar_mensagem_texto(chat_id, f"Acesse nosso cardápio online:\n🌐 {url}\n\nQualquer dúvida é só perguntar! 😊")
+                enviar_mensagem_texto(chat_id_envio, f"Acesse nosso cardápio online:\n🌐 {url}\n\nQualquer dúvida é só perguntar! 😊")
                 return
 
         from ai.chatbot import processar_mensagem
@@ -324,7 +327,7 @@ def _processar_buffer(chat_id):
             qr_code = pix_data.get("qr_code")
             if qr_code:
                 enviar_pix_completo(
-                    chat_id,
+                    chat_id_envio,
                     qr_code,
                     pix_data.get("valor_total", pix_data.get("pedido_id", 0)),
                     pix_data.get("pedido_id", 0)
@@ -332,25 +335,25 @@ def _processar_buffer(chat_id):
             else:
                 from utils.whatsapp_sender import enviar_qr_code_pix
                 enviar_qr_code_pix(
-                    chat_id,
+                    chat_id_envio,
                     pix_data.get("qr_code_base64", ""),
                     float(pix_data.get("valor_total", 0) or 0),
                     pix_data.get("pedido_id", 0)
                 )
                 from utils.whatsapp_sender import enviar_mensagem_texto
-                enviar_mensagem_texto(chat_id, "Se preferir, posso reenviar também o código PIX para copiar e colar.")
+                enviar_mensagem_texto(chat_id_envio, "Se preferir, posso reenviar também o código PIX para copiar e colar.")
         elif cartao_data and cartao_data.get("link_pagamento"):
             from utils.whatsapp_sender import enviar_link_cartao
             enviar_link_cartao(
-                chat_id,
+                chat_id_envio,
                 cartao_data["link_pagamento"],
                 cartao_data.get("valor_total", 0),
                 cartao_data.get("pedido_id", 0)
             )
         elif resposta:
-            enviar_mensagens_separadas(chat_id, resposta)
+            enviar_mensagens_separadas(chat_id_envio, resposta)
 
-        print(f"[debounce] Resposta enviada para {chat_id}", file=sys.stderr)
+        print(f"[debounce] Resposta enviada para {chat_id_envio}", file=sys.stderr)
 
     except Exception as e:
         print(f"[debounce] Erro ao processar buffer de {chat_id}: {e}", file=sys.stderr)
@@ -358,7 +361,7 @@ def _processar_buffer(chat_id):
         traceback.print_exc(file=sys.stderr)
         try:
             from utils.whatsapp_sender import enviar_mensagem_texto
-            enviar_mensagem_texto(chat_id, "Desculpe, tive um probleminha. Pode repetir?")
+            enviar_mensagem_texto(chat_id_envio, "Desculpe, tive um probleminha. Pode repetir?")
         except Exception:
             pass
 
