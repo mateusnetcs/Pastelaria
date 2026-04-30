@@ -13,8 +13,18 @@ import uuid
 from functools import wraps
 
 import jwt
+import requests
+import base64
 
-from config import DB_CONFIG, FLASK_SECRET_KEY, ALLOWED_ORIGINS, FLASK_DEBUG
+from config import (
+    DB_CONFIG,
+    FLASK_SECRET_KEY,
+    ALLOWED_ORIGINS,
+    FLASK_DEBUG,
+    WAHA_API_URL,
+    WAHA_API_KEY,
+    WAHA_SESSION,
+)
 from routes.whatsapp import whatsapp_bp
 from routes.vapi import vapi_bp
 
@@ -24,7 +34,8 @@ ADMIN_JWT_ALGORITHM = 'HS256'
 ADMIN_JWT_EXPIRES_HOURS = 24
 
 FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'frontend')
-SLIDE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'slide')
+# Slides em frontend/slide para deploy em produção (mesmo pacote que o site estático)
+SLIDE_DIR = os.path.join(FRONTEND_DIR, 'slide')
 UPLOAD_DIR = os.path.join(FRONTEND_DIR, 'uploads')
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
@@ -1090,6 +1101,52 @@ def admin_me():
 def admin_logout():
     """Logout do admin (JWT é stateless, cliente remove o token)."""
     return jsonify({'success': True}), 200
+
+
+@app.route('/api/admin/waha/qr', methods=['GET'])
+@admin_required
+def admin_waha_qr():
+    """Retorna o QR da sessão WAHA em base64 (proxy seguro — chave fica no servidor)."""
+    try:
+        if not WAHA_API_URL or not WAHA_API_KEY:
+            return jsonify({'success': False, 'error': 'WAHA não configurado no servidor'}), 500
+        session_name = (request.args.get('session') or WAHA_SESSION or 'default').strip() or 'default'
+        base = WAHA_API_URL.rstrip('/')
+        url = f"{base}/{session_name}/auth/qr"
+        headers = {
+            'X-Api-Key': WAHA_API_KEY,
+            'Accept': 'application/json',
+        }
+        r = requests.get(url, params={'format': 'image'}, headers=headers, timeout=45)
+        if r.status_code == 405:
+            r = requests.post(url, json={'format': 'image'}, headers=headers, timeout=45)
+        ct = (r.headers.get('Content-Type') or '').lower()
+        if r.status_code == 200 and 'application/json' in ct:
+            try:
+                payload = r.json()
+            except Exception:
+                payload = {}
+            b64 = payload.get('data')
+            mime = payload.get('mimetype') or 'image/png'
+            if b64:
+                return jsonify({'success': True, 'mimetype': mime, 'data': b64, 'session': session_name}), 200
+        if r.status_code == 200 and ct.startswith('image/'):
+            b64 = base64.b64encode(r.content).decode('ascii')
+            mime = ct.split(';')[0].strip() or 'image/png'
+            return jsonify({'success': True, 'mimetype': mime, 'data': b64, 'session': session_name}), 200
+        detail = (r.text or '')[:800]
+        return jsonify({
+            'success': False,
+            'error': 'Não foi possível obter o QR (sessão já conectada ou WAHA indisponível)',
+            'status': r.status_code,
+            'detail': detail,
+        }), 502
+    except requests.RequestException as e:
+        logging.exception('admin_waha_qr')
+        return jsonify({'success': False, 'error': f'Falha ao contatar o WAHA: {e}'}), 502
+    except Exception as e:
+        logging.exception('admin_waha_qr')
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 # ==================== ADMIN ====================
