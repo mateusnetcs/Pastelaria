@@ -110,7 +110,7 @@ def webhook_waha():
 
             return jsonify({"status": "call_rejected"}), 200
 
-        if event not in ('message', 'messages.upsert'):
+        if event not in ('message', 'message.any', 'messages.upsert'):
             print(f"[webhook] Evento ignorado: {event!r}", file=sys.stderr)
             return jsonify({"status": "ignored", "reason": "not a message event"}), 200
 
