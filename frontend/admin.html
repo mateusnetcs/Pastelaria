@@ -699,10 +699,16 @@
     }
 
     function abrirSlidesApresentacao() {
-        const host = location.hostname.includes(':') && !location.hostname.startsWith('[')
-            ? `[${location.hostname}]`
-            : location.hostname;
-        window.open(`${location.protocol}//${host}:5000/slide/index1.html`, '_blank', 'noopener');
+        const h = location.hostname;
+        const hostUrl = h.includes(':') && !h.startsWith('[') ? `[${h}]` : h;
+        const devFrontend8001 = location.port === '8001';
+        let url;
+        if (devFrontend8001) {
+            url = `${location.protocol}//${hostUrl}:5000/slide/index1.html`;
+        } else {
+            url = `${location.origin}/slide/index1.html`;
+        }
+        window.open(url, '_blank', 'noopener');
     }
 
     async function loginAdmin(e) {
