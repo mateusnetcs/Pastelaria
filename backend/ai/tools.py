@@ -581,16 +581,22 @@ def gerar_pagamento_pix(pedido_id, valor_total, db_config,
 
         cursor = conn.cursor(dictionary=True)
 
-        cursor.execute("SELECT id, total, status FROM pedidos WHERE id = %s", (pedido_id,))
+        cursor.execute("SELECT id, total, status, observacoes, preference_id FROM pedidos WHERE id = %s", (pedido_id,))
         pedido = cursor.fetchone()
 
-        if not pedido and chat_id:
-            print(f"[pix] Pedido #{pedido_id} não existe, buscando último pendente para {chat_id}", file=sys.stderr)
+        pedido_chat = None
+        if chat_id:
             cursor.execute(
-                "SELECT id, total, status FROM pedidos WHERE observacoes LIKE %s AND status = 'pendente' ORDER BY id DESC LIMIT 1",
+                "SELECT id, total, status, observacoes, preference_id FROM pedidos WHERE observacoes LIKE %s AND status = 'pendente' ORDER BY id DESC LIMIT 1",
                 (f'%{chat_id}%',)
             )
-            pedido = cursor.fetchone()
+            pedido_chat = cursor.fetchone()
+            if not pedido:
+                print(f"[pix] Pedido #{pedido_id} não existe, buscando último pendente para {chat_id}", file=sys.stderr)
+                pedido = pedido_chat
+            elif pedido_chat and pedido.get('status') != 'pendente':
+                print(f"[pix] Pedido #{pedido_id} não está pendente. Usando último pendente #{pedido_chat['id']} do chat {chat_id}", file=sys.stderr)
+                pedido = pedido_chat
 
         if not pedido:
             cursor.close()
@@ -645,9 +651,15 @@ def gerar_pagamento_pix(pedido_id, valor_total, db_config,
                         conn = get_db_connection(db_config)
                         if conn:
                             cursor = conn.cursor()
+                            obs = {}
+                            try:
+                                obs = json.loads(pedido.get('observacoes') or '{}')
+                            except Exception:
+                                obs = {}
+                            obs['metodo_pagamento'] = 'pix'
                             cursor.execute(
-                                "UPDATE pedidos SET preference_id = %s WHERE id = %s",
-                                (str(payment_id), pedido_id_real)
+                                "UPDATE pedidos SET preference_id = %s, observacoes = %s WHERE id = %s",
+                                (str(payment_id), json.dumps(obs, ensure_ascii=False), pedido_id_real)
                             )
                             rows = cursor.rowcount
                             conn.commit()
@@ -683,16 +695,22 @@ def gerar_pagamento_cartao(pedido_id, valor_total, db_config,
 
         cursor = conn.cursor(dictionary=True)
 
-        cursor.execute("SELECT id, total, status FROM pedidos WHERE id = %s", (pedido_id,))
+        cursor.execute("SELECT id, total, status, observacoes, preference_id FROM pedidos WHERE id = %s", (pedido_id,))
         pedido = cursor.fetchone()
 
-        if not pedido and chat_id:
-            print(f"[cartao] Pedido #{pedido_id} não existe, buscando último pendente para {chat_id}", file=sys.stderr)
+        pedido_chat = None
+        if chat_id:
             cursor.execute(
-                "SELECT id, total, status FROM pedidos WHERE observacoes LIKE %s AND status = 'pendente' ORDER BY id DESC LIMIT 1",
+                "SELECT id, total, status, observacoes, preference_id FROM pedidos WHERE observacoes LIKE %s AND status = 'pendente' ORDER BY id DESC LIMIT 1",
                 (f'%{chat_id}%',)
             )
-            pedido = cursor.fetchone()
+            pedido_chat = cursor.fetchone()
+            if not pedido:
+                print(f"[cartao] Pedido #{pedido_id} não existe, buscando último pendente para {chat_id}", file=sys.stderr)
+                pedido = pedido_chat
+            elif pedido_chat and pedido.get('status') != 'pendente':
+                print(f"[cartao] Pedido #{pedido_id} não está pendente. Usando último pendente #{pedido_chat['id']} do chat {chat_id}", file=sys.stderr)
+                pedido = pedido_chat
 
         if not pedido:
             cursor.close()
@@ -702,6 +720,21 @@ def gerar_pagamento_cartao(pedido_id, valor_total, db_config,
         pedido_id_real = pedido['id']
         valor_total_real = float(pedido['total'])
         print(f"[cartao] Usando pedido real #{pedido_id_real} (valor: R$ {valor_total_real:.2f})", file=sys.stderr)
+        obs_existente = {}
+        try:
+            obs_existente = json.loads(pedido.get('observacoes') or '{}')
+        except Exception:
+            obs_existente = {}
+        if obs_existente.get('metodo_pagamento') == 'cartao' and obs_existente.get('link_pagamento'):
+            cursor.close()
+            conn.close()
+            return {
+                "sucesso": True,
+                "pedido_id": pedido_id_real,
+                "valor_total": valor_total_real,
+                "link_pagamento": obs_existente.get('link_pagamento'),
+                "mensagem": f"Link de pagamento já existente para o pedido #{pedido_id_real}."
+            }
 
         cursor.close()
         conn.close()
@@ -748,9 +781,16 @@ def gerar_pagamento_cartao(pedido_id, valor_total, db_config,
                         conn = get_db_connection(db_config)
                         if conn:
                             cursor = conn.cursor()
+                            obs = {}
+                            try:
+                                obs = json.loads(pedido.get('observacoes') or '{}')
+                            except Exception:
+                                obs = {}
+                            obs['metodo_pagamento'] = 'cartao'
+                            obs['link_pagamento'] = mp_result.get('init_point')
                             cursor.execute(
-                                "UPDATE pedidos SET preference_id = %s WHERE id = %s",
-                                (str(preference_id), pedido_id_real)
+                                "UPDATE pedidos SET preference_id = %s, observacoes = %s WHERE id = %s",
+                                (str(preference_id), json.dumps(obs, ensure_ascii=False), pedido_id_real)
                             )
                             conn.commit()
                             cursor.close()
@@ -786,12 +826,16 @@ def confirmar_pagamento_dinheiro(pedido_id, db_config, chat_id=None,
         cursor.execute("SELECT id, total, status, observacoes FROM pedidos WHERE id = %s", (pedido_id,))
         pedido = cursor.fetchone()
 
-        if not pedido and chat_id:
+        if chat_id:
             cursor.execute(
                 "SELECT id, total, status, observacoes FROM pedidos WHERE observacoes LIKE %s AND status = 'pendente' ORDER BY id DESC LIMIT 1",
                 (f'%{chat_id}%',)
             )
-            pedido = cursor.fetchone()
+            pedido_chat = cursor.fetchone()
+            if not pedido:
+                pedido = pedido_chat
+            elif pedido.get('status') != 'pendente' and pedido_chat:
+                pedido = pedido_chat
 
         if not pedido:
             cursor.close()
@@ -808,8 +852,16 @@ def confirmar_pagamento_dinheiro(pedido_id, db_config, chat_id=None,
             pass
 
         obs['metodo_pagamento'] = 'dinheiro'
+        obs.pop('link_pagamento', None)
         obs['precisa_troco'] = precisa_troco
-        if precisa_troco and troco_para:
+        if precisa_troco and troco_para is not None:
+            troco_para = float(troco_para)
+            if troco_para < valor_total:
+                cursor.close()
+                conn.close()
+                return {
+                    "erro": f"Valor para troco (R$ {troco_para:.2f}) menor que o total do pedido (R$ {valor_total:.2f}). Confirme para qual nota o cliente vai pagar."
+                }
             obs['troco_para'] = troco_para
             obs['valor_troco'] = round(troco_para - valor_total, 2)
 
@@ -829,7 +881,7 @@ def confirmar_pagamento_dinheiro(pedido_id, db_config, chat_id=None,
             "mensagem": f"Pedido #{pedido_id_real} confirmado! Pagamento em dinheiro."
         }
 
-        if precisa_troco and troco_para:
+        if precisa_troco and troco_para is not None:
             troco = round(troco_para - valor_total, 2)
             resultado["troco"] = troco
             resultado["mensagem"] += f" Troco de R$ {troco:.2f} para nota de R$ {troco_para:.2f}."

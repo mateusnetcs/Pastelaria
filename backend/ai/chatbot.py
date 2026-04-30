@@ -200,6 +200,21 @@ def _texto_menciona_cartao(texto):
     return any(ind in texto_lower for ind in indicadores_gerando)
 
 
+def _usuario_pediu_pix(texto):
+    t = (texto or "").lower()
+    return "pix" in t
+
+
+def _usuario_pediu_cartao(texto):
+    t = (texto or "").lower()
+    return any(k in t for k in ("cartao", "cartão", "credito", "crédito", "debito", "débito"))
+
+
+def _usuario_pediu_dinheiro(texto):
+    t = (texto or "").lower()
+    return "dinheiro" in t or "troco" in t
+
+
 def _fallback_gerar_cartao(chat_id, db_config):
     """Busca o último pedido pendente do chat e gera link de cartão automaticamente."""
     from ai.tools import gerar_pagamento_cartao, get_db_connection
@@ -339,12 +354,28 @@ def processar_mensagem(mensagem_texto, chat_id, telefone_cliente,
 
             if choice.finish_reason == "tool_calls" and choice.message.tool_calls:
                 messages.append(choice.message)
+                payment_tool_executed = set()
 
                 for tool_call in choice.message.tool_calls:
                     fn_name = tool_call.function.name
                     fn_args = json.loads(tool_call.function.arguments)
 
                     print(f"[chatbot] Tool call: {fn_name}({fn_args})", file=sys.stderr)
+
+                    # Evita geração duplicada de cobrança no mesmo turno da IA.
+                    if fn_name in ("gerar_pagamento_pix", "gerar_pagamento_cartao", "confirmar_pagamento_dinheiro"):
+                        if fn_name in payment_tool_executed:
+                            resultado = json.dumps({
+                                "ignored": True,
+                                "reason": f"tool {fn_name} duplicada no mesmo turno"
+                            }, ensure_ascii=False)
+                            messages.append({
+                                "role": "tool",
+                                "tool_call_id": tool_call.id,
+                                "content": resultado
+                            })
+                            continue
+                        payment_tool_executed.add(fn_name)
 
                     resultado = executar_tool(fn_name, fn_args, db_config, chat_id)
 
@@ -376,15 +407,32 @@ def processar_mensagem(mensagem_texto, chat_id, telefone_cliente,
 
             # Resposta final em texto
             resposta_texto = choice.message.content or ""
+            user_pediu_pix = _usuario_pediu_pix(mensagem_texto)
+            user_pediu_cartao = _usuario_pediu_cartao(mensagem_texto)
+            user_pediu_dinheiro = _usuario_pediu_dinheiro(mensagem_texto)
 
-            # Fallback PIX: se a IA mencionou PIX mas não chamou a função
-            if pix_data is None and cartao_data is None and _texto_menciona_pix(resposta_texto):
+            # Fallback PIX: só quando o usuário realmente pediu PIX nesta mensagem.
+            if (
+                pix_data is None
+                and cartao_data is None
+                and user_pediu_pix
+                and not user_pediu_cartao
+                and not user_pediu_dinheiro
+                and _texto_menciona_pix(resposta_texto)
+            ):
                 pix_data = _fallback_gerar_pix(chat_id, db_config, telefone_cliente)
                 if pix_data:
                     print(f"[chatbot] PIX gerado via fallback para pedido #{pix_data.get('pedido_id')}", file=sys.stderr)
 
-            # Fallback Cartão: se a IA mencionou cartão/link mas não chamou a função
-            if cartao_data is None and pix_data is None and _texto_menciona_cartao(resposta_texto):
+            # Fallback Cartão: só quando o usuário realmente pediu cartão nesta mensagem.
+            if (
+                cartao_data is None
+                and pix_data is None
+                and user_pediu_cartao
+                and not user_pediu_pix
+                and not user_pediu_dinheiro
+                and _texto_menciona_cartao(resposta_texto)
+            ):
                 cartao_data = _fallback_gerar_cartao(chat_id, db_config)
                 if cartao_data:
                     print(f"[chatbot] Link cartão gerado via fallback para pedido #{cartao_data.get('pedido_id')}", file=sys.stderr)
