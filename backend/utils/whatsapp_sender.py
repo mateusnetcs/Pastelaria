@@ -371,14 +371,14 @@ def enviar_imagem_base64(chat_id, imagem_base64, legenda=""):
         }
         payload = {
             "chatId": chat_id,
-            "image": imagem_base64,
+            "file": {"mimetype": "image/png", "data": imagem_base64, "filename": "qrcode.png"},
             "caption": legenda,
             "session": WAHA_SESSION
         }
         
         response = requests.post(url, json=payload, headers=headers, timeout=10)
         
-        if response.status_code == 200:
+        if response.status_code in (200, 201):
             return {
                 'success': True,
                 'message': 'Imagem enviada com sucesso',

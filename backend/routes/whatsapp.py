@@ -28,6 +28,24 @@ _processed_ids = set()
 _recent_by_content = {}  # hash(chat_id|texto) -> timestamp (dedup por conteúdo)
 
 
+def _normalizar_chat_id(chat_id):
+    """
+    Normaliza IDs do WhatsApp para reduzir duplicidade entre formatos:
+    - 5599...@c.us
+    - 5599...:32@s.whatsapp.net
+    - outros formatos com sufixos de dispositivo.
+    """
+    cid = (chat_id or "").strip()
+    if not cid:
+        return ""
+    local = cid.split("@")[0]
+    local = local.split(":")[0]
+    numero = "".join(ch for ch in local if ch.isdigit())
+    if not numero:
+        return cid
+    return f"{numero}@c.us"
+
+
 def get_db_connection():
     try:
         return mysql.connector.connect(**DB_CONFIG)
@@ -137,7 +155,8 @@ def webhook_waha():
         if payload.get('fromMe', False):
             return jsonify({"status": "ignored", "reason": "own message"}), 200
 
-        chat_id = payload.get('from') or payload.get('chatId', '')
+        chat_id_raw = payload.get('from') or payload.get('chatId', '')
+        chat_id = _normalizar_chat_id(chat_id_raw)
 
         # Filtrar ANTES de qualquer processamento: só atender chat privado
         if not chat_id:
@@ -167,7 +186,7 @@ def webhook_waha():
                     return jsonify({"status": "ignored", "reason": "duplicate"}), 200
 
         # Deduplicação 2: ignorar mesmo conteúdo (chat_id + texto) em janela curta
-        # WAHA pode enviar message + message.any com IDs diferentes; normalizar para pegar variações
+        # WAHA pode enviar message + message.any com IDs diferentes e formatos de JID diferentes.
         chat_num = chat_id.split('@')[0] if '@' in chat_id else chat_id
         texto_norm = ' '.join(mensagem_texto.lower().strip().split())[:300]
         content_key = f"{chat_num}|{texto_norm}"
@@ -300,14 +319,26 @@ def _processar_buffer(chat_id):
 
         from utils.whatsapp_sender import enviar_mensagens_separadas
 
-        if pix_data and pix_data.get("qr_code"):
+        if pix_data and (pix_data.get("qr_code") or pix_data.get("qr_code_base64")):
             from utils.whatsapp_sender import enviar_pix_completo
-            enviar_pix_completo(
-                chat_id,
-                pix_data["qr_code"],
-                pix_data.get("valor_total", pix_data.get("pedido_id", 0)),
-                pix_data.get("pedido_id", 0)
-            )
+            qr_code = pix_data.get("qr_code")
+            if qr_code:
+                enviar_pix_completo(
+                    chat_id,
+                    qr_code,
+                    pix_data.get("valor_total", pix_data.get("pedido_id", 0)),
+                    pix_data.get("pedido_id", 0)
+                )
+            else:
+                from utils.whatsapp_sender import enviar_qr_code_pix
+                enviar_qr_code_pix(
+                    chat_id,
+                    pix_data.get("qr_code_base64", ""),
+                    float(pix_data.get("valor_total", 0) or 0),
+                    pix_data.get("pedido_id", 0)
+                )
+                from utils.whatsapp_sender import enviar_mensagem_texto
+                enviar_mensagem_texto(chat_id, "Se preferir, posso reenviar também o código PIX para copiar e colar.")
         elif cartao_data and cartao_data.get("link_pagamento"):
             from utils.whatsapp_sender import enviar_link_cartao
             enviar_link_cartao(
