@@ -13,13 +13,17 @@ let todosProdutos = [];
 let produtoExcluirId = null;
 let pedidoDetalheAtual = null;
 const pedidosJaImpressos = new Set();
+let filtroPedidosLista = 'todos';
 
 // Inicialização movida para admin.html (controle de login)
 
 /**
  * Navegação do menu
  */
-const SECTIONS = ['dashboard-content', 'pedidos-content', 'produtos-content', 'clientes-content', 'relatorios-content'];
+const SECTIONS = ['dashboard-content', 'pedidos-content', 'produtos-content', 'clientes-content', 'aniversariantes-content', 'relatorios-content'];
+
+let dadosAniversariantes = null;
+let filtroAniversariantes = 'hoje';
 
 function esconderTodasSecoes() {
     SECTIONS.forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('hidden'); });
@@ -37,6 +41,119 @@ function mostrarPedidos() {
     document.getElementById('pedidos-content').classList.remove('hidden');
     document.getElementById('page-title').textContent = 'Pedidos';
     atualizarMenuAtivo('pedidos');
+    renderizarListaPedidos();
+}
+
+// ========= LISTA DE PEDIDOS (página Pedidos) =========
+
+const FILTROS_PEDIDOS_LISTA = {
+    todos: (p) => p.status !== 'cancelado',
+    pendente: (p) => p.status === 'pendente',
+    confirmado: (p) => p.status === 'pago' || p.status === 'preparando',
+    pronto: (p) => p.status === 'pronto',
+    entregue: (p) => p.status === 'entregue' || p.status === 'retirado',
+};
+
+function obterBadgeStatusPedido(status) {
+    const map = {
+        pendente: { label: 'Pendente', cls: 'bg-yellow-100 text-yellow-800' },
+        pago: { label: 'Confirmado', cls: 'bg-green-100 text-green-800' },
+        preparando: { label: 'Em preparação', cls: 'bg-blue-100 text-blue-800' },
+        pronto: { label: 'Pronto p/ entrega', cls: 'bg-purple-100 text-purple-800' },
+        entregue: { label: 'Entregue', cls: 'bg-emerald-100 text-emerald-800' },
+        retirado: { label: 'Retirado', cls: 'bg-emerald-100 text-emerald-800' },
+    };
+    return map[status] || { label: status || '-', cls: 'bg-gray-100 text-gray-700' };
+}
+
+function setFiltroPedidosLista(filtro) {
+    filtroPedidosLista = filtro;
+    document.querySelectorAll('.filtro-pedido-btn').forEach((btn) => {
+        const ativo = btn.dataset.filtro === filtro;
+        btn.classList.toggle('bg-orange-600', ativo);
+        btn.classList.toggle('text-white', ativo);
+        btn.classList.toggle('border-orange-600', ativo);
+        btn.classList.toggle('bg-white', !ativo);
+        btn.classList.toggle('text-gray-700', !ativo);
+        btn.classList.toggle('border-gray-200', !ativo);
+    });
+    renderizarListaPedidos();
+}
+
+function atualizarContadoresFiltrosPedidos() {
+    const pedidos = todosPedidos.filter((p) => p.status !== 'cancelado');
+    const counts = {
+        todos: pedidos.length,
+        pendente: pedidos.filter((p) => p.status === 'pendente').length,
+        confirmado: pedidos.filter((p) => p.status === 'pago' || p.status === 'preparando').length,
+        pronto: pedidos.filter((p) => p.status === 'pronto').length,
+        entregue: pedidos.filter((p) => p.status === 'entregue' || p.status === 'retirado').length,
+    };
+    Object.keys(counts).forEach((k) => {
+        const el = document.getElementById(`count-filtro-${k}`);
+        if (el) el.textContent = counts[k];
+    });
+}
+
+function renderizarListaPedidos() {
+    const tbody = document.getElementById('pedidos-lista-tbody');
+    const vazio = document.getElementById('pedidos-lista-vazio');
+    if (!tbody) return;
+
+    atualizarContadoresFiltrosPedidos();
+
+    const busca = (document.getElementById('pedidos-busca')?.value || '').trim().toLowerCase();
+    const filtroFn = FILTROS_PEDIDOS_LISTA[filtroPedidosLista] || FILTROS_PEDIDOS_LISTA.todos;
+
+    let lista = todosPedidos.filter(filtroFn);
+
+    if (busca) {
+        lista = lista.filter((p) => {
+            const nome = (p.cliente_nome || '').toLowerCase();
+            const id = String(p.id);
+            return nome.includes(busca) || id.includes(busca) || `#${id}`.includes(busca);
+        });
+    }
+
+    lista.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+    tbody.innerHTML = '';
+
+    if (lista.length === 0) {
+        vazio?.classList.remove('hidden');
+        return;
+    }
+    vazio?.classList.add('hidden');
+
+    lista.forEach((pedido) => {
+        const badge = obterBadgeStatusPedido(pedido.status);
+        const pag = obterMetodoPagamento(pedido);
+        const dataStr = pedido.created_at
+            ? new Date(pedido.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+            : '-';
+        const proximo = obterProximoStatus(pedido.status, pedido.id);
+
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-orange-50/40 cursor-pointer transition-colors';
+        tr.onclick = (e) => {
+            if (e.target.closest('button')) return;
+            abrirDetalhePedido(pedido.id);
+        };
+        tr.innerHTML = `
+            <td class="px-4 py-3 font-bold text-gray-800">#${pedido.id}</td>
+            <td class="px-4 py-3 font-medium text-gray-800">${pedido.cliente_nome || 'Cliente'}</td>
+            <td class="px-4 py-3 text-gray-600 max-w-xs truncate hidden md:table-cell" title="${(pedido.itens_descricao || '').replace(/"/g, '&quot;')}">${pedido.itens_descricao || '-'}</td>
+            <td class="px-4 py-3 font-semibold text-slate-800">R$ ${parseFloat(pedido.total).toFixed(2).replace('.', ',')}</td>
+            <td class="px-4 py-3 hidden lg:table-cell">${pag ? `<span class="text-xs font-semibold ${pag.cor} ${pag.bg} px-2 py-0.5 rounded">${pag.texto}</span>` : '<span class="text-gray-400">—</span>'}</td>
+            <td class="px-4 py-3"><span class="text-xs font-semibold px-2.5 py-1 rounded-full ${badge.cls}">${badge.label}</span></td>
+            <td class="px-4 py-3 text-gray-500 text-xs hidden sm:table-cell">${dataStr}</td>
+            <td class="px-4 py-3 text-right whitespace-nowrap">
+                <button type="button" onclick="event.stopPropagation(); abrirDetalhePedido(${pedido.id})" class="text-orange-600 hover:text-orange-800 px-2 py-1" title="Ver detalhes"><i class="fas fa-eye"></i></button>
+                ${proximo ? `<button type="button" onclick="event.stopPropagation(); moverPedidoDireita(${pedido.id})" class="text-green-600 hover:text-green-800 px-2 py-1" title="Avançar status"><i class="fas fa-arrow-right"></i></button>` : ''}
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
 }
 
 // ========= DETALHE DO PEDIDO =========
@@ -201,6 +318,116 @@ function mostrarClientes() {
     carregarClientesAdmin();
 }
 
+function mostrarAniversariantes() {
+    esconderTodasSecoes();
+    document.getElementById('aniversariantes-content').classList.remove('hidden');
+    document.getElementById('page-title').textContent = 'Aniversariantes';
+    document.querySelector('header p').textContent = 'Clientes que fazem aniversário — dados do cadastro ou conta Google';
+    atualizarMenuAtivo('aniversariantes');
+    const sel = document.getElementById('aniv-mes-select');
+    if (sel && !sel.dataset.inited) {
+        sel.value = String(new Date().getMonth() + 1);
+        sel.dataset.inited = '1';
+    }
+    carregarAniversariantes();
+}
+
+function setFiltroAniversariantes(filtro) {
+    filtroAniversariantes = filtro;
+    document.querySelectorAll('.filtro-aniv-btn').forEach((btn) => {
+        const ativo = btn.dataset.filtroAniv === filtro;
+        btn.classList.toggle('bg-orange-600', ativo);
+        btn.classList.toggle('text-white', ativo);
+        btn.classList.toggle('border-orange-600', ativo);
+        btn.classList.toggle('bg-white', !ativo);
+        btn.classList.toggle('text-gray-700', !ativo);
+        btn.classList.toggle('border-gray-200', !ativo);
+    });
+    renderizarAniversariantes();
+}
+
+async function carregarAniversariantes() {
+    const mes = document.getElementById('aniv-mes-select')?.value || (new Date().getMonth() + 1);
+    try {
+        const resp = await fetch(`${API_URL}/admin/aniversariantes?mes=${mes}`, {
+            headers: adminHeaders(),
+            credentials: 'include',
+        });
+        const data = await resp.json();
+        if (!data.success) {
+            showToast('error', 'Erro', data.error || 'Não foi possível carregar aniversariantes');
+            return;
+        }
+        dadosAniversariantes = data;
+        const elHoje = document.getElementById('count-aniv-hoje');
+        const elMes = document.getElementById('count-aniv-mes');
+        const elTodos = document.getElementById('count-aniv-todos');
+        if (elHoje) elHoje.textContent = (data.hoje || []).length;
+        if (elMes) elMes.textContent = (data.do_mes || []).length;
+        if (elTodos) elTodos.textContent = data.total_com_data || 0;
+        renderizarAniversariantes();
+    } catch (e) {
+        console.error(e);
+        showToast('error', 'Erro', 'Falha ao carregar aniversariantes');
+    }
+}
+
+function formatarDataAniversario(iso) {
+    if (!iso) return '-';
+    const [, m, d] = iso.split('-');
+    const meses = ['', 'jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+    return `${parseInt(d, 10)} de ${meses[parseInt(m, 10)] || m}`;
+}
+
+function renderizarAniversariantes() {
+    if (!dadosAniversariantes) return;
+    const tbody = document.getElementById('aniversariantes-tbody');
+    const vazio = document.getElementById('aniversariantes-vazio');
+    const destaque = document.getElementById('aniv-hoje-destaque');
+    const nomesHoje = document.getElementById('aniv-hoje-nomes');
+    if (!tbody) return;
+
+    let lista = [];
+    if (filtroAniversariantes === 'hoje') lista = dadosAniversariantes.hoje || [];
+    else if (filtroAniversariantes === 'mes') lista = dadosAniversariantes.do_mes || [];
+    else lista = dadosAniversariantes.todos || [];
+
+    const hoje = dadosAniversariantes.hoje || [];
+    if (destaque && nomesHoje) {
+        if (hoje.length > 0) {
+            destaque.classList.remove('hidden');
+            nomesHoje.textContent = hoje.map((c) => c.nome).join(', ');
+        } else {
+            destaque.classList.add('hidden');
+        }
+    }
+
+    tbody.innerHTML = '';
+    if (lista.length === 0) {
+        vazio?.classList.remove('hidden');
+        return;
+    }
+    vazio?.classList.add('hidden');
+
+    lista.forEach((c) => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-pink-50/50';
+        const contato = [c.telefone, c.email].filter(Boolean).join(' · ') || '—';
+        const idadeTxt = c.ano_informado && c.idade != null ? `${c.idade} anos` : '—';
+        const origem = c.conta_google
+            ? '<span class="text-xs font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">Google</span>'
+            : '<span class="text-xs font-semibold text-gray-600 bg-gray-100 px-2 py-0.5 rounded">Cadastro</span>';
+        tr.innerHTML = `
+            <td class="px-4 py-3 font-medium text-gray-800">${c.nome}</td>
+            <td class="px-4 py-3 text-gray-600 text-xs">${contato}</td>
+            <td class="px-4 py-3 font-semibold text-pink-700">${formatarDataAniversario(c.data_nascimento)}</td>
+            <td class="px-4 py-3 text-gray-600 hidden md:table-cell">${idadeTxt}</td>
+            <td class="px-4 py-3">${origem}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
 function mostrarRelatorios() {
     esconderTodasSecoes();
     document.getElementById('relatorios-content').classList.remove('hidden');
@@ -258,6 +485,7 @@ async function carregarPedidos() {
                 console.log('Total de pedidos:', todosPedidos.length);
                 console.log('Pedidos:', todosPedidos);
                 renderizarKanban();
+                renderizarListaPedidos();
             } else {
                 console.error('API retornou success: false', data);
                 showToast('error', 'Erro', data.error || 'Erro ao carregar pedidos');
@@ -719,6 +947,7 @@ function moverPedidoParaStatus(pedidoId, novoStatus) {
     
     pedidoLocal.status = novoStatus;
     renderizarKanban();
+    renderizarListaPedidos();
     
     if (novoStatus === 'pago' && !pedidosJaImpressos.has(pedidoId)) {
         pedidosJaImpressos.add(pedidoId);
@@ -736,12 +965,14 @@ function moverPedidoParaStatus(pedidoId, novoStatus) {
         } else {
             pedidoLocal.status = statusAnterior;
             renderizarKanban();
+            renderizarListaPedidos();
             showToast('error', 'Erro', data.error || 'Falha ao atualizar');
         }
     }).catch(err => {
         console.error('Erro ao atualizar status:', err);
         pedidoLocal.status = statusAnterior;
         renderizarKanban();
+        renderizarListaPedidos();
         showToast('error', 'Erro', 'Verifique sua conexão');
     });
 }

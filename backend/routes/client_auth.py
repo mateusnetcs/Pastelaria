@@ -3,6 +3,7 @@ Autenticação do cliente (site) — login com Google.
 """
 import logging
 import secrets
+from datetime import date
 
 import bcrypt
 import requests as http_requests
@@ -77,6 +78,63 @@ def _user_response(user):
 def _email_verificado(idinfo: dict) -> bool:
     ev = idinfo.get('email_verified')
     return ev is True or str(ev).lower() in ('true', '1', 'yes')
+
+
+def _fetch_google_birthday(access_token: str):
+    """
+    Busca aniversário na conta Google (People API).
+    Requer escopo user.birthday.read e People API ativa no Google Cloud.
+    """
+    if not access_token:
+        return None
+    try:
+        resp = http_requests.get(
+            'https://people.googleapis.com/v1/people/me',
+            params={'personFields': 'birthdays'},
+            headers={'Authorization': f'Bearer {access_token}'},
+            timeout=15,
+        )
+        if resp.status_code != 200:
+            logging.warning('[auth] People API birthdays: %s %s', resp.status_code, resp.text[:200])
+            return None
+        birthdays = (resp.json() or {}).get('birthdays') or []
+        for entry in birthdays:
+            d = entry.get('date') or {}
+            month, day = d.get('month'), d.get('day')
+            if not month or not day:
+                continue
+            year = d.get('year') or 1900
+            try:
+                return date(int(year), int(month), int(day))
+            except (TypeError, ValueError):
+                continue
+    except Exception as e:
+        logging.warning('[auth] Erro ao buscar aniversário Google: %s', e)
+    return None
+
+
+def _salvar_data_nascimento(user_id: int, data_nasc: date) -> bool:
+    conn = _get_db()
+    if not conn:
+        return False
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE usuarios
+            SET data_nascimento = %s
+            WHERE id = %s AND data_nascimento IS NULL
+            """,
+            (data_nasc, user_id),
+        )
+        conn.commit()
+        updated = cursor.rowcount > 0
+        cursor.close()
+        conn.close()
+        return updated
+    except Exception:
+        logging.exception('[auth] Erro ao salvar data_nascimento')
+        return False
 
 
 def _verify_via_google_tokeninfo(credential: str, client_ids: list) -> dict:
@@ -257,8 +315,39 @@ def auth_google():
         conn.close()
 
         _criar_sessao(user)
-        return jsonify({'success': True, 'user': _user_response(user)}), 200
+        return jsonify({
+            'success': True,
+            'user': _user_response(user),
+            'sync_birthday': True,
+        }), 200
 
     except Exception:
         logging.exception("[auth] Erro no login Google")
         return jsonify({'success': False, 'error': 'Erro interno do servidor'}), 500
+
+
+@bp.route('/api/auth/google/birthday', methods=['POST'])
+def auth_google_birthday():
+    """Salva data de nascimento do cliente a partir do token OAuth (escopo birthday)."""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Não autenticado'}), 401
+
+    data = request.get_json(silent=True) or {}
+    access_token = (data.get('access_token') or '').strip()
+    if not access_token:
+        return jsonify({'success': False, 'error': 'Token de acesso ausente'}), 400
+
+    data_nasc = _fetch_google_birthday(access_token)
+    if not data_nasc:
+        return jsonify({
+            'success': False,
+            'error': 'Aniversário não encontrado na conta Google ou permissão negada',
+        }), 404
+
+    saved = _salvar_data_nascimento(user_id, data_nasc)
+    return jsonify({
+        'success': True,
+        'data_nascimento': data_nasc.isoformat(),
+        'saved': saved,
+    }), 200

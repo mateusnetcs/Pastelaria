@@ -179,6 +179,10 @@
                 <i class="fas fa-users w-6"></i>
                 <span class="ml-3 font-medium">Clientes</span>
             </a>
+            <a href="#" onclick="mostrarAniversariantes(); return false;" class="sidebar-item flex items-center px-6 py-3 text-gray-400 hover:text-white transition-colors">
+                <i class="fas fa-birthday-cake w-6"></i>
+                <span class="ml-3 font-medium">Aniversariantes</span>
+            </a>
             <a href="#" onclick="mostrarRelatorios(); return false;" class="sidebar-item flex items-center px-6 py-3 text-gray-400 hover:text-white transition-colors">
                 <i class="fas fa-file-alt w-6"></i>
                 <span class="ml-3 font-medium">Relatórios</span>
@@ -283,9 +287,64 @@
         </div>
 
         <!-- Outras páginas (inicialmente ocultas) -->
-        <div id="pedidos-content" class="hidden p-8">
-            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <p class="text-gray-600">Página de Pedidos - Em desenvolvimento</p>
+        <div id="pedidos-content" class="hidden p-8 overflow-y-auto h-full flex flex-col">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+                <div class="flex flex-wrap gap-2" id="pedidos-filtros">
+                    <button type="button" onclick="setFiltroPedidosLista('todos')" data-filtro="todos"
+                        class="filtro-pedido-btn px-4 py-2 rounded-lg text-sm font-semibold transition-colors bg-orange-600 text-white">
+                        Todos <span class="ml-1 opacity-80" id="count-filtro-todos">0</span>
+                    </button>
+                    <button type="button" onclick="setFiltroPedidosLista('pendente')" data-filtro="pendente"
+                        class="filtro-pedido-btn px-4 py-2 rounded-lg text-sm font-semibold transition-colors bg-white border border-gray-200 text-gray-700 hover:bg-yellow-50">
+                        Pendente <span class="ml-1 opacity-70" id="count-filtro-pendente">0</span>
+                    </button>
+                    <button type="button" onclick="setFiltroPedidosLista('confirmado')" data-filtro="confirmado"
+                        class="filtro-pedido-btn px-4 py-2 rounded-lg text-sm font-semibold transition-colors bg-white border border-gray-200 text-gray-700 hover:bg-green-50">
+                        Confirmado <span class="ml-1 opacity-70" id="count-filtro-confirmado">0</span>
+                    </button>
+                    <button type="button" onclick="setFiltroPedidosLista('pronto')" data-filtro="pronto"
+                        class="filtro-pedido-btn px-4 py-2 rounded-lg text-sm font-semibold transition-colors bg-white border border-gray-200 text-gray-700 hover:bg-purple-50">
+                        Pronto p/ entrega <span class="ml-1 opacity-70" id="count-filtro-pronto">0</span>
+                    </button>
+                    <button type="button" onclick="setFiltroPedidosLista('entregue')" data-filtro="entregue"
+                        class="filtro-pedido-btn px-4 py-2 rounded-lg text-sm font-semibold transition-colors bg-white border border-gray-200 text-gray-700 hover:bg-emerald-50">
+                        Entregue <span class="ml-1 opacity-70" id="count-filtro-entregue">0</span>
+                    </button>
+                </div>
+                <div class="flex gap-2">
+                    <input type="search" id="pedidos-busca" placeholder="Buscar cliente ou #pedido..."
+                        oninput="renderizarListaPedidos()"
+                        class="px-4 py-2 border border-gray-200 rounded-lg text-sm w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-orange-500">
+                    <button type="button" onclick="carregarPedidos()"
+                        class="px-4 py-2 bg-white border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                        title="Atualizar lista">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 flex-1 overflow-hidden flex flex-col min-h-0">
+                <div class="overflow-x-auto flex-1">
+                    <table class="w-full text-sm">
+                        <thead class="bg-gray-50 border-b border-gray-200 sticky top-0">
+                            <tr>
+                                <th class="text-left px-4 py-3 font-semibold text-gray-600">Pedido</th>
+                                <th class="text-left px-4 py-3 font-semibold text-gray-600">Cliente</th>
+                                <th class="text-left px-4 py-3 font-semibold text-gray-600 hidden md:table-cell">Itens</th>
+                                <th class="text-left px-4 py-3 font-semibold text-gray-600">Total</th>
+                                <th class="text-left px-4 py-3 font-semibold text-gray-600 hidden lg:table-cell">Pagamento</th>
+                                <th class="text-left px-4 py-3 font-semibold text-gray-600">Status</th>
+                                <th class="text-left px-4 py-3 font-semibold text-gray-600 hidden sm:table-cell">Data</th>
+                                <th class="text-right px-4 py-3 font-semibold text-gray-600">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pedidos-lista-tbody" class="divide-y divide-gray-100"></tbody>
+                    </table>
+                </div>
+                <div id="pedidos-lista-vazio" class="hidden flex flex-col items-center justify-center py-16 text-gray-400">
+                    <i class="fas fa-inbox text-5xl mb-3"></i>
+                    <p class="text-lg font-medium">Nenhum pedido neste filtro</p>
+                    <p class="text-sm mt-1">Os pedidos aparecem aqui quando forem feitos no site</p>
+                </div>
             </div>
         </div>
 
@@ -559,6 +618,74 @@
             </div>
         </div>
 
+        <div id="aniversariantes-content" class="hidden p-8 overflow-y-auto h-full flex flex-col">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+                <div class="flex flex-wrap gap-2" id="aniv-filtros">
+                    <button type="button" onclick="setFiltroAniversariantes('hoje')" data-filtro-aniv="hoje"
+                        class="filtro-aniv-btn px-4 py-2 rounded-lg text-sm font-semibold transition-colors bg-orange-600 text-white">
+                        Hoje <span class="ml-1 opacity-80" id="count-aniv-hoje">0</span>
+                    </button>
+                    <button type="button" onclick="setFiltroAniversariantes('mes')" data-filtro-aniv="mes"
+                        class="filtro-aniv-btn px-4 py-2 rounded-lg text-sm font-semibold transition-colors bg-white border border-gray-200 text-gray-700 hover:bg-pink-50">
+                        Este mês <span class="ml-1 opacity-70" id="count-aniv-mes">0</span>
+                    </button>
+                    <button type="button" onclick="setFiltroAniversariantes('todos')" data-filtro-aniv="todos"
+                        class="filtro-aniv-btn px-4 py-2 rounded-lg text-sm font-semibold transition-colors bg-white border border-gray-200 text-gray-700 hover:bg-gray-50">
+                        Todos <span class="ml-1 opacity-70" id="count-aniv-todos">0</span>
+                    </button>
+                </div>
+                <div class="flex items-center gap-2">
+                    <label class="text-sm text-gray-600 font-medium">Mês:</label>
+                    <select id="aniv-mes-select" onchange="carregarAniversariantes()"
+                        class="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-orange-500">
+                        <option value="1">Janeiro</option><option value="2">Fevereiro</option><option value="3">Março</option>
+                        <option value="4">Abril</option><option value="5">Maio</option><option value="6">Junho</option>
+                        <option value="7">Julho</option><option value="8">Agosto</option><option value="9">Setembro</option>
+                        <option value="10">Outubro</option><option value="11">Novembro</option><option value="12">Dezembro</option>
+                    </select>
+                    <button type="button" onclick="carregarAniversariantes()"
+                        class="px-4 py-2 bg-white border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50" title="Atualizar">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+            </div>
+            <p class="text-sm text-gray-500 mb-4">
+                Datas vindas do cadastro ou da conta Google (quando o cliente autoriza ao entrar com Google).
+            </p>
+            <div id="aniv-hoje-destaque" class="hidden mb-6 p-4 bg-gradient-to-r from-pink-500 to-orange-500 rounded-xl text-white shadow-md">
+                <div class="flex items-center gap-3">
+                    <i class="fas fa-birthday-cake text-3xl"></i>
+                    <div>
+                        <p class="font-bold text-lg">Aniversariantes de hoje!</p>
+                        <p class="text-sm text-white/90" id="aniv-hoje-nomes"></p>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 flex-1 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead class="bg-gray-50 border-b border-gray-200">
+                            <tr>
+                                <th class="text-left px-4 py-3 font-semibold text-gray-600">Cliente</th>
+                                <th class="text-left px-4 py-3 font-semibold text-gray-600">Contato</th>
+                                <th class="text-left px-4 py-3 font-semibold text-gray-600">Aniversário</th>
+                                <th class="text-left px-4 py-3 font-semibold text-gray-600 hidden md:table-cell">Idade</th>
+                                <th class="text-left px-4 py-3 font-semibold text-gray-600">Origem</th>
+                            </tr>
+                        </thead>
+                        <tbody id="aniversariantes-tbody" class="divide-y divide-gray-100"></tbody>
+                    </table>
+                </div>
+                <div id="aniversariantes-vazio" class="hidden flex flex-col items-center justify-center py-16 text-gray-400">
+                    <i class="fas fa-birthday-cake text-5xl mb-3"></i>
+                    <p class="text-lg font-medium">Nenhum aniversariante neste filtro</p>
+                    <p class="text-sm mt-1 text-center max-w-md px-4">Clientes que entrarem com Google e autorizarem o acesso à data de aniversário aparecerão aqui automaticamente.</p>
+                </div>
+            </div>
+        </div>
+
+
+
         <div id="relatorios-content" class="hidden p-8 overflow-y-auto h-full space-y-6">
 
             <!-- KPIs -->
@@ -815,6 +942,6 @@
     });
     </script>
 
-    <script src="js/admin.js?v=7"></script>
+    <script src="js/admin.js?v=9"></script>
 </body>
 </html>

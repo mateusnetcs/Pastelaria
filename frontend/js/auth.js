@@ -6,6 +6,9 @@
 let googleClientId = null;
 let googleScriptInicializado = false;
 let googleLoginEmAndamento = false;
+let googleBirthdayTokenClient = null;
+
+const GOOGLE_BIRTHDAY_SCOPE = 'https://www.googleapis.com/auth/user.birthday.read';
 
 /**
  * Garante API_URL apontando para o Flask antes de chamar auth
@@ -200,6 +203,53 @@ async function clicarLoginGoogle() {
     showToast('info', 'Google', 'Use o botão oficial "Continuar com Google" logo abaixo');
 }
 
+function initGoogleBirthdayClient() {
+    if (!googleClientId || typeof google === 'undefined' || !google.accounts?.oauth2) return;
+    if (googleBirthdayTokenClient) return;
+    googleBirthdayTokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: googleClientId,
+        scope: GOOGLE_BIRTHDAY_SCOPE,
+        callback: async (tokenResponse) => {
+            if (tokenResponse.error || !tokenResponse.access_token) return;
+            await enviarAniversarioGoogle(tokenResponse.access_token);
+        },
+    });
+}
+
+async function enviarAniversarioGoogle(accessToken) {
+    prepararApiUrlAuth();
+    try {
+        const res = await fetch(`${API_URL}/auth/google/birthday`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ access_token: accessToken }),
+        });
+        const data = await res.json();
+        if (data.success && data.saved) {
+            console.log('[auth] Aniversário sincronizado do Google');
+        }
+    } catch (e) {
+        console.warn('[auth] Sync aniversário Google:', e);
+    }
+}
+
+/**
+ * Pede permissão (silenciosa se já concedida) e envia aniversário ao backend.
+ */
+async function sincronizarAniversarioGoogle() {
+    if (!googleClientId) return;
+    const scriptOk = await aguardarGoogleScript();
+    if (!scriptOk) return;
+    initGoogleBirthdayClient();
+    if (!googleBirthdayTokenClient) return;
+    try {
+        googleBirthdayTokenClient.requestAccessToken({ prompt: '' });
+    } catch (e) {
+        console.warn('[auth] Token aniversário:', e);
+    }
+}
+
 /**
  * Callback do Google — envia JWT ao backend
  */
@@ -232,6 +282,9 @@ async function handleGoogleCredential(response) {
             updateUI();
             closeModals();
             showToast('success', 'Login realizado!', `Bem-vindo, ${data.user.nome}!`);
+            if (data.sync_birthday !== false) {
+                sincronizarAniversarioGoogle();
+            }
         } else {
             showToast('error', 'Erro no login Google', data.error || 'Tente novamente');
         }

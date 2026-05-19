@@ -8,7 +8,7 @@ import subprocess
 import os
 import sys
 import logging
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 import uuid
 from functools import wraps
 
@@ -1102,6 +1102,101 @@ def admin_logout():
 
 # ==================== ADMIN ====================
 # Rotas /api/admin/waha/qr e /api/waha/qr: ver routes/waha_qr.py (blueprint registado cedo)
+
+# --- ANIVERSARIANTES ---
+
+@app.route('/api/admin/aniversariantes', methods=['GET'])
+@admin_required
+def admin_aniversariantes():
+    """Lista clientes com data de nascimento (hoje, mês atual e próximos)."""
+    try:
+        mes_param = request.args.get('mes')
+        hoje = date.today()
+        mes = int(mes_param) if mes_param and mes_param.isdigit() else hoje.month
+        if mes < 1 or mes > 12:
+            mes = hoje.month
+
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({'success': False, 'error': 'Erro DB'}), 500
+
+        cursor = conn.cursor(dictionary=True)
+        has_google = False
+        try:
+            cursor.execute("""
+                SELECT COUNT(*) AS c FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'usuarios' AND COLUMN_NAME = 'google_id'
+            """)
+            has_google = bool(cursor.fetchone()['c'])
+
+        except Exception:
+            pass
+
+        cols = 'u.id, u.nome, u.email, u.telefone, u.data_nascimento'
+        if has_google:
+            cols += ', u.google_id'
+
+        cursor.execute(f"""
+            SELECT {cols}
+            FROM usuarios u
+            WHERE (u.is_admin = FALSE OR u.is_admin IS NULL)
+              AND u.data_nascimento IS NOT NULL
+            ORDER BY MONTH(u.data_nascimento), DAY(u.data_nascimento), u.nome
+        """)
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+
+        def serializar(row):
+            dn = row['data_nascimento']
+            if hasattr(dn, 'isoformat'):
+                dn_str = dn.isoformat()
+            else:
+                dn_str = str(dn) if dn else None
+            idade = None
+            ano_real = dn.year > 1900 if hasattr(dn, 'year') else False
+            if dn and ano_real:
+                idade = hoje.year - dn.year
+                if (hoje.month, hoje.day) < (dn.month, dn.day):
+                    idade -= 1
+            item = {
+                'id': row['id'],
+                'nome': row['nome'],
+                'email': row['email'],
+                'telefone': row['telefone'],
+                'data_nascimento': dn_str,
+                'idade': idade,
+                'ano_informado': ano_real,
+            }
+            if has_google:
+                item['conta_google'] = bool(row.get('google_id'))
+            return item
+
+        todos = [serializar(r) for r in rows]
+        hoje_lista = [
+            c for c in todos
+            if c['data_nascimento']
+            and int(c['data_nascimento'][5:7]) == hoje.month
+            and int(c['data_nascimento'][8:10]) == hoje.day
+        ]
+        mes_lista = [
+            c for c in todos
+            if c['data_nascimento'] and int(c['data_nascimento'][5:7]) == mes
+        ]
+
+        return jsonify({
+            'success': True,
+            'mes': mes,
+            'hoje': hoje_lista,
+            'do_mes': mes_lista,
+            'todos': todos,
+            'total_com_data': len(todos),
+        }), 200
+    except Exception:
+        logging.exception('Erro ao listar aniversariantes')
+        return jsonify({'success': False, 'error': 'Erro interno do servidor'}), 500
+
 
 # --- CRUD CLIENTES ---
 
