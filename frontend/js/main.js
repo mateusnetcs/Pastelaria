@@ -121,6 +121,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         console.warn('Erro ao detectar porta:', error);
     }
     
+    await carregarConfigAuth();
     restaurarSessao();
     carregarProdutos();
 });

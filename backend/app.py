@@ -13,20 +13,17 @@ import uuid
 from functools import wraps
 
 import jwt
-import requests
-import base64
 
 from config import (
     DB_CONFIG,
     FLASK_SECRET_KEY,
     ALLOWED_ORIGINS,
     FLASK_DEBUG,
-    WAHA_API_URL,
-    WAHA_API_KEY,
-    WAHA_SESSION,
 )
+from routes.waha_qr import bp as waha_qr_bp
 from routes.whatsapp import whatsapp_bp
 from routes.vapi import vapi_bp
+from routes.client_auth import bp as client_auth_bp
 
 logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
 
@@ -47,6 +44,8 @@ CORS(app,
      allow_headers=["Content-Type", "Authorization"],
      methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
 
+app.register_blueprint(waha_qr_bp)
+app.register_blueprint(client_auth_bp)
 app.register_blueprint(whatsapp_bp)
 app.register_blueprint(vapi_bp)
 
@@ -62,14 +61,6 @@ def serve_slides(filename):
     if os.path.isfile(slidepath):
         return send_from_directory(SLIDE_DIR, filename)
     return jsonify({'success': False, 'error': 'Slide não encontrado'}), 404
-
-
-@app.route('/<path:filename>')
-def serve_frontend(filename):
-    filepath = os.path.join(FRONTEND_DIR, filename)
-    if os.path.isfile(filepath):
-        return send_from_directory(FRONTEND_DIR, filename)
-    return send_from_directory(FRONTEND_DIR, 'index.html')
 
 
 def get_db_connection():
@@ -166,6 +157,12 @@ def login():
         
         if not user:
             return jsonify({'success': False, 'error': 'Email ou senha incorretos'}), 401
+
+        if not user.get('senha'):
+            return jsonify({
+                'success': False,
+                'error': 'Esta conta usa login com Google. Clique em "Continuar com Google".',
+            }), 401
         
         # Verificar senha
         if not bcrypt.checkpw(senha.encode('utf-8'), user['senha'].encode('utf-8')):
@@ -1103,53 +1100,8 @@ def admin_logout():
     return jsonify({'success': True}), 200
 
 
-@app.route('/api/admin/waha/qr', methods=['GET'])
-@admin_required
-def admin_waha_qr():
-    """Retorna o QR da sessão WAHA em base64 (proxy seguro — chave fica no servidor)."""
-    try:
-        if not WAHA_API_URL or not WAHA_API_KEY:
-            return jsonify({'success': False, 'error': 'WAHA não configurado no servidor'}), 500
-        session_name = (request.args.get('session') or WAHA_SESSION or 'default').strip() or 'default'
-        base = WAHA_API_URL.rstrip('/')
-        url = f"{base}/{session_name}/auth/qr"
-        headers = {
-            'X-Api-Key': WAHA_API_KEY,
-            'Accept': 'application/json',
-        }
-        r = requests.get(url, params={'format': 'image'}, headers=headers, timeout=45)
-        if r.status_code == 405:
-            r = requests.post(url, json={'format': 'image'}, headers=headers, timeout=45)
-        ct = (r.headers.get('Content-Type') or '').lower()
-        if r.status_code == 200 and 'application/json' in ct:
-            try:
-                payload = r.json()
-            except Exception:
-                payload = {}
-            b64 = payload.get('data')
-            mime = payload.get('mimetype') or 'image/png'
-            if b64:
-                return jsonify({'success': True, 'mimetype': mime, 'data': b64, 'session': session_name}), 200
-        if r.status_code == 200 and ct.startswith('image/'):
-            b64 = base64.b64encode(r.content).decode('ascii')
-            mime = ct.split(';')[0].strip() or 'image/png'
-            return jsonify({'success': True, 'mimetype': mime, 'data': b64, 'session': session_name}), 200
-        detail = (r.text or '')[:800]
-        return jsonify({
-            'success': False,
-            'error': 'Não foi possível obter o QR (sessão já conectada ou WAHA indisponível)',
-            'status': r.status_code,
-            'detail': detail,
-        }), 502
-    except requests.RequestException as e:
-        logging.exception('admin_waha_qr')
-        return jsonify({'success': False, 'error': f'Falha ao contatar o WAHA: {e}'}), 502
-    except Exception as e:
-        logging.exception('admin_waha_qr')
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
 # ==================== ADMIN ====================
+# Rotas /api/admin/waha/qr e /api/waha/qr: ver routes/waha_qr.py (blueprint registado cedo)
 
 # --- CRUD CLIENTES ---
 
@@ -2246,6 +2198,15 @@ def relatorio_dre():
     except Exception as e:
         logging.exception("Erro interno")
         return jsonify({'success': False, 'error': 'Erro interno do servidor'}), 500
+
+
+@app.route('/<path:filename>')
+def serve_frontend(filename):
+    """Por último: entrega arquivos estáticos ou SPA; não registrar antes das rotas /api."""
+    filepath = os.path.join(FRONTEND_DIR, filename)
+    if os.path.isfile(filepath):
+        return send_from_directory(FRONTEND_DIR, filename)
+    return send_from_directory(FRONTEND_DIR, 'index.html')
 
 
 if __name__ == '__main__':

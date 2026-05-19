@@ -41,7 +41,6 @@ index_completo.html
 logs_flask.txt
 
 # Scripts locais (Windows)
-INICIAR SERVIDOR.bat
 iniciar.ps1
 test_endpoint_porta5001.ps1
 docker-compose-minimal.yml
@@ -54,3 +53,4 @@ docker-compose-minimal.yml
 *.env
 config.ini
 secrets.json
+client_secret*.json

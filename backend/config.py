@@ -16,9 +16,11 @@ DB_CONFIG = {
     'port': int(os.getenv('DB_PORT', '3306'))
 }
 
-WAHA_API_URL = os.getenv('WAHA_API_URL', 'http://localhost:3001/api')
-WAHA_API_KEY = os.getenv('WAHA_API_KEY', '')
-WAHA_SESSION = os.getenv('WAHA_SESSION', 'default')
+WAHA_API_URL = (os.getenv('WAHA_API_URL') or 'http://localhost:3001/api').strip()
+# Valor do header X-Api-Key para o WAHA: tem de ser a chave em TEXTO PLANO.
+# NÃO use o valor "sha512:..." que aparece nas env vars do Docker — esse é só o hash guardado no servidor.
+WAHA_API_KEY = (os.getenv('WAHA_API_KEY') or '').strip()
+WAHA_SESSION = (os.getenv('WAHA_SESSION') or 'default').strip()
 
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
 OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-4o-mini')
@@ -35,3 +37,11 @@ for _o in ('http://127.0.0.1:8001', 'http://127.0.0.1:5000'):
     if _o not in ALLOWED_ORIGINS:
         ALLOWED_ORIGINS.append(_o)
 FLASK_DEBUG = os.getenv('FLASK_DEBUG', 'false').lower() == 'true'
+
+# Google Sign-In (OAuth 2.0 — tipo "Aplicativo da Web" no Google Cloud Console)
+GOOGLE_CLIENT_ID = (os.getenv('GOOGLE_CLIENT_ID') or '').strip()
+GOOGLE_CLIENT_SECRET = (os.getenv('GOOGLE_CLIENT_SECRET') or '').strip()
+# Suporta vários IDs separados por vírgula (ex.: dev + produção)
+GOOGLE_CLIENT_IDS = [
+    x.strip() for x in GOOGLE_CLIENT_ID.split(',') if x.strip()
+]

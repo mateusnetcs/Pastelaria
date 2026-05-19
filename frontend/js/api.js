@@ -33,19 +33,55 @@ function defaultApiUrl() {
 let API_URL = defaultApiUrl();
 
 /**
+ * Se API_URL for só http(s)://host:porta sem path /api, ${API_URL}/admin/... vira /admin/... na origem → 404.
+ */
+function normalizarApiUrlComSufixo() {
+    if (typeof API_URL !== 'string') return;
+    const t = API_URL.trim();
+    if (!t || t === '/api' || t.endsWith('/api')) return;
+    if (!t.startsWith('http')) return;
+    try {
+        const u = new URL(t);
+        const path = (u.pathname || '/').replace(/\/$/, '') || '/';
+        if (path === '/') {
+            API_URL = `${u.origin}/api`;
+            console.warn('[api] API_URL sem /api — corrigido para', API_URL);
+        }
+    } catch (e) {}
+}
+
+/**
+ * Base da API sempre terminando em /api (chame antes de montar `${base}/admin/...`).
+ */
+function apiRootUrl() {
+    if (typeof garantirApiBackendDev === 'function') {
+        garantirApiBackendDev();
+    }
+    normalizarApiUrlComSufixo();
+    let b = (typeof API_URL === 'string' && API_URL.trim()) ? API_URL.trim().replace(/\/$/, '') : '';
+    if (!b) {
+        return typeof location !== 'undefined' ? `${location.origin}/api` : '/api';
+    }
+    if (b === '/api' || b.endsWith('/api')) return b;
+    return `${b}/api`;
+}
+
+/**
  * Garante URL absoluta do Flask em dev (evita POST no server.py da porta 8001 → 501).
  */
 function garantirApiBackendDev() {
-    if (!isHostLocalOuRedeInterna()) return;
-    const relativoOuMesmaOrigemErrada =
-        typeof API_URL === 'string' &&
-        (API_URL.startsWith('/') ||
-            API_URL.startsWith(`${location.origin}/api`));
-    if (relativoOuMesmaOrigemErrada) {
-        const h = hostnameParaUrl(location.hostname);
-        API_URL = `http://${h}:5000/api`;
-        console.warn('[api] Corrigindo API_URL para:', API_URL);
+    if (isHostLocalOuRedeInterna()) {
+        const relativoOuMesmaOrigemErrada =
+            typeof API_URL === 'string' &&
+            (API_URL.startsWith('/') ||
+                API_URL.startsWith(`${location.origin}/api`));
+        if (relativoOuMesmaOrigemErrada) {
+            const h = hostnameParaUrl(location.hostname);
+            API_URL = `http://${h}:5000/api`;
+            console.warn('[api] Corrigindo API_URL para:', API_URL);
+        }
     }
+    normalizarApiUrlComSufixo();
 }
 
 async function detectarPortaBackend() {
@@ -90,6 +126,7 @@ async function detectarPortaBackend() {
     }
 
     API_URL = `${location.origin}/api`;
+    normalizarApiUrlComSufixo();
     try {
         const resp = await fetch(`${API_URL}/produtos`, { method: 'GET', cache: 'no-cache' });
         if (resp.ok) {

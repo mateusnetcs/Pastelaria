@@ -43,7 +43,7 @@
     
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/styles.css?v=2">
 </head>
 <body class="bg-orange-50 text-gray-800">
     
@@ -335,30 +335,60 @@
     </nav>
 
     <!-- Modal Login -->
-    <div id="login-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
-        <div class="bg-white rounded-lg p-8 max-w-md w-full mx-4">
-            <h2 class="text-2xl font-bold mb-4">Entrar</h2>
-            <form onsubmit="handleLogin(event)">
-                <input type="email" id="login-email" placeholder="Email" required class="w-full p-3 border rounded mb-4">
-                <input type="password" id="login-senha" placeholder="Senha" required class="w-full p-3 border rounded mb-4">
-                <button type="submit" class="w-full bg-orange-600 text-white py-3 rounded-lg font-bold hover:bg-orange-700">Entrar</button>
+    <div id="login-modal" class="auth-modal-overlay hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="auth-modal-card mx-4" role="dialog" aria-labelledby="login-title">
+            <button type="button" onclick="closeModals()" class="auth-modal-close" aria-label="Fechar"><i class="fas fa-times"></i></button>
+            <div class="auth-modal-header">
+                <div class="auth-modal-icon"><i class="fas fa-user"></i></div>
+                <h2 id="login-title" class="auth-modal-title">Entrar</h2>
+                <p class="auth-modal-subtitle">Acesse sua conta para finalizar o pedido</p>
+            </div>
+            <form onsubmit="handleLogin(event)" class="space-y-3">
+                <input type="email" id="login-email" placeholder="E-mail" autocomplete="email" class="auth-input">
+                <input type="password" id="login-senha" placeholder="Senha" autocomplete="current-password" class="auth-input">
+                <button type="submit" class="auth-btn-primary mt-1">Entrar com e-mail</button>
             </form>
-            <button onclick="closeModals()" class="mt-4 text-gray-600">Cancelar</button>
+            <div id="google-login-wrap" class="hidden">
+                <div class="auth-divider"><span>ou</span></div>
+                <div class="auth-google-section">
+                    <div id="google-login-btn" class="flex justify-center w-full min-h-[44px]"></div>
+                    <button type="button" id="google-login-fallback" onclick="clicarLoginGoogle()" class="hidden auth-btn-google-fallback">
+                        <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.13 13.09 17.62 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.56 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+                        Continuar com Google
+                    </button>
+                </div>
+            </div>
+            <p class="auth-modal-footer">Não tem conta? <span class="auth-link" onclick="closeModals(); showRegisterModal();">Cadastre-se</span></p>
         </div>
     </div>
 
     <!-- Modal Cadastro -->
-    <div id="register-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
-        <div class="bg-white rounded-lg p-8 max-w-md w-full mx-4">
-            <h2 class="text-2xl font-bold mb-4">Cadastrar</h2>
-            <form onsubmit="handleRegister(event)">
-                <input type="text" id="reg-nome" placeholder="Nome completo" required class="w-full p-3 border rounded mb-4">
-                <input type="email" id="reg-email" placeholder="Email" required class="w-full p-3 border rounded mb-4">
-                <input type="tel" id="reg-telefone" placeholder="Telefone" class="w-full p-3 border rounded mb-4">
-                <input type="password" id="reg-senha" placeholder="Senha" required class="w-full p-3 border rounded mb-4">
-                <button type="submit" class="w-full bg-orange-600 text-white py-3 rounded-lg font-bold hover:bg-orange-700">Cadastrar</button>
+    <div id="register-modal" class="auth-modal-overlay hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="auth-modal-card mx-4" role="dialog" aria-labelledby="register-title">
+            <button type="button" onclick="closeModals()" class="auth-modal-close" aria-label="Fechar"><i class="fas fa-times"></i></button>
+            <div class="auth-modal-header">
+                <div class="auth-modal-icon"><i class="fas fa-user-plus"></i></div>
+                <h2 id="register-title" class="auth-modal-title">Cadastrar</h2>
+                <p class="auth-modal-subtitle">Crie sua conta em poucos segundos</p>
+            </div>
+            <form onsubmit="handleRegister(event)" class="space-y-3">
+                <input type="text" id="reg-nome" placeholder="Nome completo" required autocomplete="name" class="auth-input">
+                <input type="email" id="reg-email" placeholder="E-mail" required autocomplete="email" class="auth-input">
+                <input type="tel" id="reg-telefone" placeholder="Telefone (opcional)" autocomplete="tel" class="auth-input">
+                <input type="password" id="reg-senha" placeholder="Senha" required autocomplete="new-password" class="auth-input">
+                <button type="submit" class="auth-btn-primary mt-1">Criar conta com e-mail</button>
             </form>
-            <button onclick="closeModals()" class="mt-4 text-gray-600">Cancelar</button>
+            <div id="google-register-wrap" class="hidden">
+                <div class="auth-divider"><span>ou</span></div>
+                <div class="auth-google-section">
+                    <div id="google-register-btn" class="flex justify-center w-full min-h-[44px]"></div>
+                    <button type="button" id="google-register-fallback" onclick="clicarLoginGoogle()" class="hidden auth-btn-google-fallback">
+                        <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.13 13.09 17.62 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.56 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+                        Continuar com Google
+                    </button>
+                </div>
+            </div>
+            <p class="auth-modal-footer">Já tem conta? <span class="auth-link" onclick="closeModals(); showLoginModal();">Entrar</span></p>
         </div>
     </div>
 
@@ -480,9 +510,10 @@
     </footer>
 
     <!-- Scripts JavaScript (ordem importante) -->
-    <script src="js/api.js?v=3"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="js/api.js?v=5"></script>
     <script src="js/toast.js"></script>
-    <script src="js/auth.js"></script>
+    <script src="js/auth.js?v=6"></script>
     <script src="js/carrinho.js"></script>
     <script src="js/pedidos.js"></script>
     <script src="js/pagamento.js"></script>
