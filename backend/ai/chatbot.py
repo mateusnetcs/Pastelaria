@@ -58,6 +58,7 @@ Seu nome é *Lia*. Você é simpática, eficiente e fala de forma natural (infor
    - NUNCA assuma ou gere pagamento sem o cliente informar a forma.
    - Se o cliente já informou a forma de pagamento ANTES (na mesma mensagem do pedido), aí pode pular a pergunta e gerar direto.
    a) **PIX**: Chame `gerar_pagamento_pix`. O sistema envia o QR Code automaticamente.
+   d) **Cliente disse que já pagou** (Já paguei, paguei, fiz o pix): Chame `verificar_pagamento_pedido` IMEDIATAMENTE. Se confirmado, parabenize; se ainda pendente, peça para aguardar alguns segundos e tentar de novo.
    b) **Cartão**: Chame `gerar_pagamento_cartao`. O sistema envia o link de pagamento automaticamente. Responda APENAS com uma frase curta tipo "Gerando seu link de pagamento, um momento! 😊".
    c) **Dinheiro**: Pergunte se precisa de troco. Se sim, pergunte "troco para quanto?" (ex: nota de R$50). Depois chame `confirmar_pagamento_dinheiro` com os dados de troco.
 
@@ -338,6 +339,8 @@ def processar_mensagem(mensagem_texto, chat_id, telefone_cliente,
 
     pix_data = None
     cartao_data = None
+    conteudo_enviado_pelo_sistema = False
+    ultima_verificacao_pagamento = None
 
     try:
         for _ in range(MAX_TOOL_CALLS):
@@ -379,6 +382,24 @@ def processar_mensagem(mensagem_texto, chat_id, telefone_cliente,
 
                     resultado = executar_tool(fn_name, fn_args, db_config, chat_id)
 
+                    if fn_name in (
+                        "enviar_lista_produtos_whatsapp",
+                        "enviar_cardapio_foto",
+                        "gerar_pagamento_pix",
+                        "gerar_pagamento_cartao",
+                        "verificar_pagamento_pedido",
+                    ):
+                        conteudo_enviado_pelo_sistema = True
+
+                    if fn_name == "verificar_pagamento_pedido":
+                        try:
+                            v = json.loads(resultado)
+                            ultima_verificacao_pagamento = v
+                            if v.get('confirmado'):
+                                conteudo_enviado_pelo_sistema = True
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+
                     if fn_name == "gerar_pagamento_pix":
                         try:
                             pix_result = json.loads(resultado)
@@ -407,6 +428,12 @@ def processar_mensagem(mensagem_texto, chat_id, telefone_cliente,
 
             # Resposta final em texto
             resposta_texto = choice.message.content or ""
+            if ultima_verificacao_pagamento and not resposta_texto.strip():
+                resposta_texto = (
+                    ultima_verificacao_pagamento.get('message')
+                    or ultima_verificacao_pagamento.get('error')
+                    or ''
+                )
             user_pediu_pix = _usuario_pediu_pix(mensagem_texto)
             user_pediu_cartao = _usuario_pediu_cartao(mensagem_texto)
             user_pediu_dinheiro = _usuario_pediu_dinheiro(mensagem_texto)
@@ -437,9 +464,24 @@ def processar_mensagem(mensagem_texto, chat_id, telefone_cliente,
                 if cartao_data:
                     print(f"[chatbot] Link cartão gerado via fallback para pedido #{cartao_data.get('pedido_id')}", file=sys.stderr)
 
-            salvar_mensagem(chat_id, "assistant", resposta_texto, db_config)
+            skip_texto = conteudo_enviado_pelo_sistema and (
+                pix_data is not None or cartao_data is not None
+                or any(
+                    t in (resposta_texto or "").lower()
+                    for t in ("pronto", "gerando", "enviei", "cardápio", "cardapio", "pix", "pagamento")
+                )
+            )
+            if skip_texto:
+                resposta_texto = ""
 
-            return {"resposta": resposta_texto, "pix_data": pix_data, "cartao_data": cartao_data}
+            salvar_mensagem(chat_id, "assistant", resposta_texto or "(enviado pelo sistema)", db_config)
+
+            return {
+                "resposta": resposta_texto,
+                "pix_data": pix_data,
+                "cartao_data": cartao_data,
+                "skip_texto": skip_texto,
+            }
 
         # Se atingiu o limite de tool calls, forçar resposta
         response = client.chat.completions.create(
@@ -450,7 +492,12 @@ def processar_mensagem(mensagem_texto, chat_id, telefone_cliente,
         )
         resposta_texto = response.choices[0].message.content or ""
         salvar_mensagem(chat_id, "assistant", resposta_texto, db_config)
-        return {"resposta": resposta_texto, "pix_data": pix_data, "cartao_data": cartao_data}
+        return {
+            "resposta": resposta_texto,
+            "pix_data": pix_data,
+            "cartao_data": cartao_data,
+            "skip_texto": False,
+        }
 
     except Exception as e:
         print(f"[chatbot] Erro ao processar mensagem: {e}", file=sys.stderr)

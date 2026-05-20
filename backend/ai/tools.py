@@ -222,6 +222,18 @@ TOOLS_DEFINITIONS = [
     {
         "type": "function",
         "function": {
+            "name": "verificar_pagamento_pedido",
+            "description": "Verifica no Mercado Pago se o PIX do último pedido pendente deste cliente foi aprovado. Use quando o cliente disser que já pagou (Já paguei, paguei, fiz o pix).",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "confirmar_pagamento_dinheiro",
             "description": "Confirma o pedido com pagamento em dinheiro. Use após perguntar sobre troco e o cliente confirmar.",
             "parameters": {
@@ -313,11 +325,32 @@ def cadastrar_cliente(nome, email, telefone, db_config, data_nascimento=None):
         telefone_limpo = ''.join(filter(str.isdigit, telefone))
         cursor = conn.cursor(dictionary=True)
 
-        cursor.execute("SELECT id FROM usuarios WHERE email = %s", (email,))
-        if cursor.fetchone():
+        cursor.execute(
+            "SELECT id, nome, telefone FROM usuarios WHERE email = %s",
+            (email,),
+        )
+        existente = cursor.fetchone()
+        if existente:
+            if telefone_limpo and not (existente.get('telefone') or '').strip():
+                cursor.execute(
+                    "UPDATE usuarios SET telefone = %s WHERE id = %s",
+                    (telefone_limpo, existente['id']),
+                )
+                conn.commit()
             cursor.close()
             conn.close()
-            return {"erro": "Este email já está cadastrado."}
+            senha_hint = _gerar_senha_cliente(existente.get('nome') or nome, None)
+            print(f"[tools] Email já cadastrado — reutilizando cliente_id={existente['id']}", file=sys.stderr)
+            return {
+                "sucesso": True,
+                "cliente_id": existente['id'],
+                "nome": existente.get('nome') or nome,
+                "email": email,
+                "telefone": telefone_limpo,
+                "ja_existia": True,
+                "mensagem": "Cliente já estava cadastrado; seguimos com o pedido.",
+                "senha_acesso": senha_hint,
+            }
 
         cursor.execute("SELECT id FROM usuarios WHERE telefone = %s", (telefone_limpo,))
         if cursor.fetchone():
@@ -540,6 +573,27 @@ def criar_pedido(itens, db_config, whatsapp_id=None, tipo_entrega="retirada", en
         if whatsapp_id:
             telefone_num = whatsapp_id.split('@')[0] if '@' in whatsapp_id else whatsapp_id
 
+        # Evita pedido duplicado se o webhook processar a mesma confirmação duas vezes
+        if whatsapp_id:
+            cursor.execute("""
+                SELECT id, total, status FROM pedidos
+                WHERE observacoes LIKE %s AND status = 'pendente'
+                  AND created_at >= DATE_SUB(NOW(), INTERVAL 20 MINUTE)
+                ORDER BY id DESC LIMIT 1
+            """, (f'%{whatsapp_id}%',))
+            pendente = cursor.fetchone()
+            if pendente:
+                cursor.close()
+                conn.close()
+                print(f"[tools] Pedido pendente #{pendente['id']} reutilizado para {whatsapp_id}", file=sys.stderr)
+                return {
+                    "sucesso": True,
+                    "pedido_id": pendente['id'],
+                    "total": float(pendente['total']),
+                    "ja_existia": True,
+                    "mensagem": f"Pedido #{pendente['id']} já criado. Total: R$ {float(pendente['total']):.2f}",
+                }
+
         cursor.execute("""
             INSERT INTO pedidos (cliente_id, cliente_nome, cliente_telefone, cliente_whatsapp, total, status, observacoes, created_at)
             VALUES (%s, %s, %s, %s, %s, 'pendente', %s, NOW())
@@ -615,6 +669,10 @@ def gerar_pagamento_pix(pedido_id, valor_total, db_config,
             'Mercado pago', 'api-mercadopago.py'
         )
 
+        telefone_pix = ''
+        if chat_id:
+            telefone_pix = chat_id.split('@')[0] if '@' in chat_id else chat_id
+
         dados = {
             'action': 'criar_pedido',
             'pedido_id': pedido_id_real,
@@ -622,7 +680,8 @@ def gerar_pagamento_pix(pedido_id, valor_total, db_config,
             'itens': [f"Pedido #{pedido_id_real}"],
             'dados_cliente': {
                 'nome': cliente_nome,
-                'email': cliente_email
+                'email': cliente_email or 'cliente@pastelaobrothers.com',
+                'telefone': telefone_pix,
             }
         }
 
@@ -955,6 +1014,10 @@ def executar_tool(nome_funcao, argumentos, db_config, chat_id=None):
                 argumentos.get("cliente_email", ""),
                 chat_id=chat_id
             )
+
+        elif nome_funcao == "verificar_pagamento_pedido":
+            from utils.pagamento_confirmacao import verificar_e_confirmar_pagamento_chat
+            resultado = verificar_e_confirmar_pagamento_chat(chat_id, db_config, chat_id)
 
         elif nome_funcao == "confirmar_pagamento_dinheiro":
             resultado = confirmar_pagamento_dinheiro(

@@ -18,15 +18,28 @@ from config import DB_CONFIG, WAHA_API_URL, WAHA_API_KEY, WAHA_SESSION, OPENAI_A
 whatsapp_bp = Blueprint('whatsapp', __name__)
 
 DEBOUNCE_SECONDS = 6
-DEDUP_WINDOW_SECONDS = 25
+DEDUP_WINDOW_SECONDS = 45
 
 _message_buffers = {}
 _buffer_timers = {}
 _buffer_lock = threading.Lock()
+_dedup_lock = threading.Lock()
 _message_ids = {}
 _processed_ids = set()
 _recent_by_content = {}  # hash(chat_id|texto) -> timestamp (dedup por conteúdo)
 _chat_id_envio = {}  # chat_id_normalizado -> último chat_id bruto observado
+_chats_processando = set()  # evita processar o mesmo chat em paralelo
+
+
+def _cliente_disse_ja_paguei(texto_lower):
+    if not texto_lower:
+        return False
+    frases = (
+        'ja paguei', 'já paguei', 'já pague', 'ja pague',
+        'paguei', 'fiz o pix', 'fiz o pagamento', 'pix feito',
+        'pagamento feito', 'transferi', 'transferência feita',
+    )
+    return any(f in texto_lower for f in frases)
 
 
 def _normalizar_chat_id(chat_id):
@@ -129,7 +142,12 @@ def webhook_waha():
 
             return jsonify({"status": "call_rejected"}), 200
 
-        if event not in ('message', 'message.any', 'messages.upsert'):
+        # WAHA dispara "message" e "message.any" para a mesma mensagem → ignora message.any
+        if event == 'message.any':
+            print(f"[webhook] Evento message.any ignorado (usa-se apenas message)", file=sys.stderr)
+            return jsonify({"status": "ignored", "reason": "message.any duplicate event"}), 200
+
+        if event not in ('message', 'messages.upsert'):
             print(f"[webhook] Evento ignorado: {event!r}", file=sys.stderr)
             return jsonify({"status": "ignored", "reason": "not a message event"}), 200
 
@@ -176,31 +194,31 @@ def webhook_waha():
         mensagem_texto = payload.get('body', '').strip()
         message_id = payload.get('id', '')
 
-        # Deduplicação 1: ignorar message_id já processado
-        if message_id:
-            with _buffer_lock:
-                all_ids = []
-                for ids in _message_ids.values():
-                    all_ids.extend(ids)
-                if message_id in all_ids or message_id in _processed_ids:
-                    print(f"[webhook] Mensagem {message_id} já processada, ignorando duplicata", file=sys.stderr)
-                    return jsonify({"status": "ignored", "reason": "duplicate"}), 200
-
-        # Deduplicação 2: ignorar mesmo conteúdo (chat_id + texto) em janela curta
-        # WAHA pode enviar message + message.any com IDs diferentes e formatos de JID diferentes.
+        # Deduplicação (message_id + conteúdo) — lock evita corrida entre message e message.any
         chat_num = chat_id.split('@')[0] if '@' in chat_id else chat_id
         texto_norm = ' '.join(mensagem_texto.lower().strip().split())[:300]
         content_key = f"{chat_num}|{texto_norm}"
         now = time.time()
-        with _buffer_lock:
-            # Limpar entradas antigas
+
+        with _dedup_lock:
+            if message_id and message_id in _processed_ids:
+                print(f"[webhook] Mensagem {message_id} já processada, ignorando duplicata", file=sys.stderr)
+                return jsonify({"status": "ignored", "reason": "duplicate"}), 200
+
             expired = [k for k, ts in _recent_by_content.items() if now - ts > DEDUP_WINDOW_SECONDS]
             for k in expired:
                 del _recent_by_content[k]
-            if content_key in _recent_by_content:
+
+            if texto_norm and content_key in _recent_by_content:
                 print(f"[webhook] Conteúdo duplicado em janela de {DEDUP_WINDOW_SECONDS}s, ignorando", file=sys.stderr)
                 return jsonify({"status": "ignored", "reason": "duplicate_content"}), 200
-            _recent_by_content[content_key] = now
+
+            if message_id:
+                _processed_ids.add(message_id)
+            if texto_norm:
+                _recent_by_content[content_key] = now
+            if len(_processed_ids) > 2000:
+                _processed_ids.clear()
 
         has_media = payload.get('hasMedia', False)
         media = payload.get('media')
@@ -267,214 +285,146 @@ def webhook_waha():
 def _processar_buffer(chat_id):
     """Processa todas as mensagens acumuladas de um chat após o debounce."""
     with _buffer_lock:
-        mensagens = _message_buffers.pop(chat_id, [])
-        ids = _message_ids.pop(chat_id, [])
-        _buffer_timers.pop(chat_id, None)
-        chat_id_envio = _chat_id_envio.pop(chat_id, chat_id)
-        for mid in ids:
-            _processed_ids.add(mid)
-        if len(_processed_ids) > 500:
-            _processed_ids.clear()
-
-    if not mensagens:
-        return
-
-    mensagem_combinada = "\n".join(mensagens)
-    print(f"[debounce] Processando {len(mensagens)} msg(s) de {chat_id}: {mensagem_combinada[:100]}...", file=sys.stderr)
+        if chat_id in _chats_processando:
+            print(f"[debounce] Chat {chat_id} já em processamento, ignorando timer duplicado", file=sys.stderr)
+            return
+        _chats_processando.add(chat_id)
 
     try:
-        telefone = chat_id.split('@')[0] if '@' in chat_id else chat_id
+        with _buffer_lock:
+            mensagens = _message_buffers.pop(chat_id, [])
+            ids = _message_ids.pop(chat_id, [])
+            _buffer_timers.pop(chat_id, None)
+            chat_id_envio = _chat_id_envio.pop(chat_id, chat_id)
+            for mid in ids:
+                if mid:
+                    _processed_ids.add(mid)
 
-        # Pedido de cardápio: enviar foto + link ANTES da IA (garante envio)
-        txt_lower = mensagem_combinada.lower().strip()
-        pediu_cardapio = any(p in txt_lower for p in ('cardapio', 'cardápio', 'menu'))
-        if pediu_cardapio:
-            from utils.whatsapp_sender import enviar_cardapio_foto, enviar_mensagem_texto
-            cardapio_res = enviar_cardapio_foto(chat_id_envio)
-            if cardapio_res.get('success'):
-                enviar_mensagem_texto(chat_id_envio, "Pronto! Enviei o cardápio para você. 😊 Qualquer dúvida é só perguntar!")
-                print(f"[debounce] Cardápio enviado diretamente para {chat_id_envio}", file=sys.stderr)
-                return
-            else:
-                from utils.whatsapp_sender import enviar_cardapio_lista
-                if enviar_cardapio_lista(chat_id_envio, DB_CONFIG):
-                    return
-                # Fallback final se listar falhar
-                from config import WEBHOOK_PUBLIC_URL
-                url = (WEBHOOK_PUBLIC_URL or "https://pastelaobhoters.chatboot.cloud").rstrip('/')
-                enviar_mensagem_texto(chat_id_envio, f"Acesse nosso cardápio online:\n🌐 {url}\n\nQualquer dúvida é só perguntar! 😊")
-                return
+        if not mensagens:
+            return
 
-        from ai.chatbot import processar_mensagem
+        mensagem_combinada = "\n".join(mensagens)
+        print(f"[debounce] Processando {len(mensagens)} msg(s) de {chat_id}: {mensagem_combinada[:100]}...", file=sys.stderr)
 
-        resultado = processar_mensagem(
-            mensagem_texto=mensagem_combinada,
-            chat_id=chat_id,
-            telefone_cliente=telefone,
-            api_key=OPENAI_API_KEY,
-            model=OPENAI_MODEL,
-            db_config=DB_CONFIG
-        )
-
-        resposta = resultado.get("resposta", "")
-        pix_data = resultado.get("pix_data")
-        cartao_data = resultado.get("cartao_data")
-
-        from utils.whatsapp_sender import enviar_mensagens_separadas
-
-        if pix_data and (pix_data.get("qr_code") or pix_data.get("qr_code_base64")):
-            from utils.whatsapp_sender import enviar_pix_completo
-            qr_code = pix_data.get("qr_code")
-            if qr_code:
-                enviar_pix_completo(
-                    chat_id_envio,
-                    qr_code,
-                    pix_data.get("valor_total", pix_data.get("pedido_id", 0)),
-                    pix_data.get("pedido_id", 0)
-                )
-            else:
-                from utils.whatsapp_sender import enviar_qr_code_pix
-                enviar_qr_code_pix(
-                    chat_id_envio,
-                    pix_data.get("qr_code_base64", ""),
-                    float(pix_data.get("valor_total", 0) or 0),
-                    pix_data.get("pedido_id", 0)
-                )
-                from utils.whatsapp_sender import enviar_mensagem_texto
-                enviar_mensagem_texto(chat_id_envio, "Se preferir, posso reenviar também o código PIX para copiar e colar.")
-        elif cartao_data and cartao_data.get("link_pagamento"):
-            from utils.whatsapp_sender import enviar_link_cartao
-            enviar_link_cartao(
-                chat_id_envio,
-                cartao_data["link_pagamento"],
-                cartao_data.get("valor_total", 0),
-                cartao_data.get("pedido_id", 0)
-            )
-        elif resposta:
-            enviar_mensagens_separadas(chat_id_envio, resposta)
-
-        print(f"[debounce] Resposta enviada para {chat_id_envio}", file=sys.stderr)
-
-    except Exception as e:
-        print(f"[debounce] Erro ao processar buffer de {chat_id}: {e}", file=sys.stderr)
-        import traceback
-        traceback.print_exc(file=sys.stderr)
         try:
-            from utils.whatsapp_sender import enviar_mensagem_texto
-            enviar_mensagem_texto(chat_id_envio, "Desculpe, tive um probleminha. Pode repetir?")
-        except Exception:
-            pass
+            telefone = chat_id.split('@')[0] if '@' in chat_id else chat_id
+
+            txt_lower = mensagem_combinada.lower().strip()
+            if _cliente_disse_ja_paguei(txt_lower):
+                from utils.pagamento_confirmacao import verificar_e_confirmar_pagamento_chat
+                from utils.whatsapp_sender import enviar_mensagem_texto
+
+                conf = verificar_e_confirmar_pagamento_chat(chat_id, DB_CONFIG, chat_id_envio)
+                if conf.get('confirmado'):
+                    if not conf.get('whatsapp_enviado'):
+                        from utils.whatsapp_sender import enviar_mensagem_texto
+                        enviar_mensagem_texto(chat_id_envio, conf.get('message', 'Pagamento confirmado!'))
+                    print(f"[debounce] Pagamento confirmado via 'Já paguei' pedido #{conf.get('pedido_id')}", file=sys.stderr)
+                    return
+                msg = conf.get('message') or conf.get('error') or (
+                    'Ainda não localizei seu pagamento. Aguarde alguns segundos e envie *Já paguei* novamente.'
+                )
+                enviar_mensagem_texto(chat_id_envio, msg)
+                return
+
+            from ai.chatbot import processar_mensagem
+
+            resultado = processar_mensagem(
+                mensagem_texto=mensagem_combinada,
+                chat_id=chat_id,
+                telefone_cliente=telefone,
+                api_key=OPENAI_API_KEY,
+                model=OPENAI_MODEL,
+                db_config=DB_CONFIG
+            )
+
+            resposta = resultado.get("resposta", "")
+            pix_data = resultado.get("pix_data")
+            cartao_data = resultado.get("cartao_data")
+            skip_texto = resultado.get("skip_texto", False)
+
+            from utils.whatsapp_sender import enviar_mensagens_separadas
+
+            if pix_data and (pix_data.get("qr_code") or pix_data.get("qr_code_base64")):
+                from utils.whatsapp_sender import enviar_pix_completo
+                qr_code = pix_data.get("qr_code")
+                if qr_code:
+                    enviar_pix_completo(
+                        chat_id_envio,
+                        qr_code,
+                        pix_data.get("valor_total", pix_data.get("pedido_id", 0)),
+                        pix_data.get("pedido_id", 0)
+                    )
+                else:
+                    from utils.whatsapp_sender import enviar_qr_code_pix
+                    enviar_qr_code_pix(
+                        chat_id_envio,
+                        pix_data.get("qr_code_base64", ""),
+                        float(pix_data.get("valor_total", 0) or 0),
+                        pix_data.get("pedido_id", 0)
+                    )
+            elif cartao_data and cartao_data.get("link_pagamento"):
+                from utils.whatsapp_sender import enviar_link_cartao
+                enviar_link_cartao(
+                    chat_id_envio,
+                    cartao_data["link_pagamento"],
+                    cartao_data.get("valor_total", 0),
+                    cartao_data.get("pedido_id", 0)
+                )
+            elif resposta and not skip_texto:
+                enviar_mensagens_separadas(chat_id_envio, resposta)
+
+            print(f"[debounce] Resposta enviada para {chat_id_envio}", file=sys.stderr)
+
+        except Exception as e:
+            print(f"[debounce] Erro ao processar buffer de {chat_id}: {e}", file=sys.stderr)
+            import traceback
+            traceback.print_exc(file=sys.stderr)
+            try:
+                from utils.whatsapp_sender import enviar_mensagem_texto
+                enviar_mensagem_texto(chat_id_envio, "Desculpe, tive um probleminha. Pode repetir?")
+            except Exception:
+                pass
+    finally:
+        with _buffer_lock:
+            _chats_processando.discard(chat_id)
 
 
 # =====================================================================
 # WEBHOOK MERCADO PAGO - Confirmação automática de pagamento
 # =====================================================================
 
-@whatsapp_bp.route('/api/mercadopago/webhook', methods=['POST'])
+@whatsapp_bp.route('/api/mercadopago/webhook', methods=['GET', 'POST'])
 def webhook_mercadopago():
     """
     Recebe notificações do Mercado Pago quando um pagamento muda de status.
     Quando aprovado, atualiza o pedido e envia confirmação no WhatsApp.
     """
+    if request.method == 'GET':
+        return jsonify({"status": "ok", "webhook": "mercadopago"}), 200
+
     try:
         data = request.json or {}
-        query_type = request.args.get('type', data.get('type', ''))
-        query_data_id = request.args.get('data.id', '')
+        if not data and request.args:
+            data = dict(request.args)
 
-        print(f"[mercadopago] Webhook recebido: type={query_type}, data={json.dumps(data)[:200]}", file=sys.stderr)
+        from utils.pagamento_confirmacao import (
+            extrair_payment_id_mercadopago,
+            processar_webhook_mercadopago,
+        )
 
-        if query_type == 'payment' or data.get('action') == 'payment.updated':
-            payment_id = query_data_id or data.get('data', {}).get('id')
-            if not payment_id:
-                return jsonify({"status": "ok"}), 200
+        payment_id = extrair_payment_id_mercadopago(data, request.args)
+        print(
+            f"[mercadopago] Webhook payment_id={payment_id!r} "
+            f"body={json.dumps(data, ensure_ascii=False)[:300]}",
+            file=sys.stderr,
+        )
 
-            import subprocess, os
-            script_path = os.path.join(
-                os.path.dirname(os.path.dirname(__file__)),
-                'Mercado pago', 'api-mercadopago.py'
-            )
-
-            result = subprocess.run(
-                [sys.executable, script_path],
-                input=json.dumps({"action": "verificar_status", "payment_id": str(payment_id)}),
-                text=True, capture_output=True, timeout=15
-            )
-
-            if result.returncode == 0 and result.stdout.strip():
-                lines = result.stdout.strip().split('\n')
-                mp_data = json.loads(lines[-1])
-
-                if mp_data.get('success') and mp_data.get('status') == 'approved':
-                    external_ref = mp_data.get('external_reference', '')
-                    print(f"[mercadopago] Pagamento APROVADO! Ref: {external_ref}, PaymentID: {payment_id}", file=sys.stderr)
-
-                    conn = get_db_connection()
-                    if conn:
-                        cursor = conn.cursor(dictionary=True)
-
-                        pedido = None
-
-                        cursor.execute(
-                            "SELECT id, cliente_id, total, status, observacoes FROM pedidos WHERE preference_id = %s ORDER BY id DESC LIMIT 1",
-                            (str(payment_id),)
-                        )
-                        pedido = cursor.fetchone()
-                        if pedido:
-                            print(f"[mercadopago] Pedido encontrado por preference_id: #{pedido['id']}", file=sys.stderr)
-
-                        if not pedido and external_ref:
-                            match = re.match(r'PEDIDO_(\d+)_', external_ref)
-                            if match:
-                                ref_pedido_id = int(match.group(1))
-                                cursor.execute(
-                                    "SELECT id, cliente_id, total, status, observacoes FROM pedidos WHERE id = %s LIMIT 1",
-                                    (ref_pedido_id,)
-                                )
-                                pedido = cursor.fetchone()
-                                if pedido:
-                                    print(f"[mercadopago] Pedido encontrado por external_reference: #{pedido['id']}", file=sys.stderr)
-                                    cursor.execute(
-                                        "UPDATE pedidos SET preference_id = %s WHERE id = %s",
-                                        (str(payment_id), pedido['id'])
-                                    )
-                                    conn.commit()
-
-                        if not pedido:
-                            print(f"[mercadopago] ERRO: Nenhum pedido encontrado para payment_id={payment_id}, ref={external_ref}", file=sys.stderr)
-
-                        if pedido and pedido['status'] not in ('pago', 'preparando', 'pronto', 'entregue'):
-                            cursor.execute(
-                                "UPDATE pedidos SET status = 'pago' WHERE id = %s",
-                                (pedido['id'],)
-                            )
-                            conn.commit()
-                            print(f"[mercadopago] Pedido #{pedido['id']} atualizado para PAGO", file=sys.stderr)
-
-                            whatsapp_id = None
-                            try:
-                                obs = json.loads(pedido['observacoes']) if pedido['observacoes'] else {}
-                                whatsapp_id = obs.get('whatsapp_id')
-                            except (json.JSONDecodeError, TypeError):
-                                pass
-
-                            if whatsapp_id:
-                                cursor.execute("SELECT nome FROM usuarios WHERE id = %s", (pedido['cliente_id'],))
-                                cliente = cursor.fetchone()
-                                nome = cliente['nome'] if cliente else 'cliente'
-
-                                from utils.whatsapp_sender import enviar_mensagem_texto
-                                msg = (
-                                    f"Pagamento confirmado! *Pedido #{pedido['id']}* pago com sucesso.\n\n"
-                                    f"Obrigado(a), *{nome}*! Seu pedido já está sendo preparado.\n\n"
-                                    f"Assim que ficar pronto, te aviso! "
-                                )
-                                enviar_mensagem_texto(whatsapp_id, msg)
-                                print(f"[mercadopago] Confirmação enviada para {whatsapp_id}", file=sys.stderr)
-                            else:
-                                print(f"[mercadopago] whatsapp_id não encontrado nas observações do pedido #{pedido['id']}", file=sys.stderr)
-
-                        cursor.close()
-                        conn.close()
+        result = processar_webhook_mercadopago(data, request.args, get_db_connection)
+        if result.get('approved') and result.get('success'):
+            print(f"[mercadopago] OK pedido #{result.get('pedido_id')}", file=sys.stderr)
+        elif result.get('handled'):
+            print(f"[mercadopago] Processado: {result}", file=sys.stderr)
 
         return jsonify({"status": "ok"}), 200
 
